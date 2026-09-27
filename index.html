@@ -18,14 +18,15 @@
    TOKENS
 ═══════════════════════════════════════════════════════════ */
 :root{
-  --navy:#0f2744; --navy2:#1a3a52; --blue:#1d6fa4; --blue-lt:#2e86c1;
-  --teal:#0e7c7b; --teal-lt:#12a09e;
-  --bg:#f2f6fb; --surface:#fff; --border:#dce6f0;
+  --navy:#184e78; --navy2:#1e5e8a; --blue:#2288a8; --blue-lt:#3ab5c8;
+  --teal:#2ac0cc; --teal-lt:#42d0dc;
+  --olive:#87ba38; --olive-lt:#9fcf45;
+  --bg:#f5f8fc; --surface:#fff; --border:#dce6f0;
   --text:#0d1f30; --muted:#5a7a94; --faint:#9bb3c6;
   --red:#c0392b; --amber:#d4800a; --green:#1a7a47;
   --r:12px; --r-sm:8px; --r-xs:6px;
-  --sh:0 1px 3px rgba(15,39,68,.07),0 4px 14px rgba(15,39,68,.06);
-  --sh-lg:0 8px 28px rgba(15,39,68,.13);
+  --sh:0 1px 3px rgba(24,78,120,.07),0 4px 14px rgba(24,78,120,.06);
+  --sh-lg:0 8px 28px rgba(24,78,120,.13);
   --f:'Inter',system-ui,sans-serif;
   --bar:60px; --nav:62px; --safe:env(safe-area-inset-bottom,0px);
 }
@@ -590,14 +591,15 @@ button,input,select,textarea{font-family:var(--f)}
   --sun-soft:#fff3c4;
   --orange:#e98745;
   --orange-soft:#ffe2cc;
+  --olive-glow:rgba(135,186,56,.22);
 }
 body::before{background:rgba(243,200,75,.22)}
 body::after{background:rgba(233,135,69,.18)}
 .kpi::before,.qa::before,.icard::before,.acard::before,.cfg-card::before{
-  background:linear-gradient(90deg, var(--navy), var(--blue), var(--sun), var(--orange));
+  background:linear-gradient(90deg, var(--navy), var(--blue), var(--teal-lt), var(--olive));
 }
 .btn-primary,.btn-sm-primary{
-  background:linear-gradient(135deg, var(--navy) 0%, var(--blue) 58%, var(--orange) 150%);
+  background:linear-gradient(135deg, var(--navy) 0%, var(--blue) 60%, var(--teal-lt) 150%);
 }
 .b-borrador{background:var(--sun-soft);color:#8a5d00}
 .b-pdf{background:#e8f6f7;color:#23616b}
@@ -612,9 +614,9 @@ body:not(.role-user) .user-only{display:none!important}
   place-items:center;
   padding:22px;
   background:
-    radial-gradient(circle at 15% 12%, rgba(243,200,75,.22), transparent 28%),
-    radial-gradient(circle at 88% 82%, rgba(233,135,69,.20), transparent 30%),
-    linear-gradient(135deg,#f9fcfc 0%,#eef6f7 100%);
+    radial-gradient(circle at 15% 12%, rgba(135,186,56,.16), transparent 28%),
+    radial-gradient(circle at 88% 82%, rgba(42,192,204,.14), transparent 30%),
+    linear-gradient(135deg,#f7fbfc 0%,#edf6f8 100%);
 }
 .login-card{
   width:min(430px,100%);
@@ -631,7 +633,7 @@ body:not(.role-user) .user-only{display:none!important}
 .login-card::before{
   content:"";
   position:absolute;inset:0 0 auto 0;height:5px;
-  background:linear-gradient(90deg,var(--navy),var(--blue),var(--sun),var(--orange));
+  background:linear-gradient(90deg,var(--navy),var(--blue),var(--teal-lt),var(--olive));
 }
 @keyframes loginIn{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
 .login-logo{
@@ -643,8 +645,8 @@ body:not(.role-user) .user-only{display:none!important}
 }
 .login-logo img{width:52px;height:52px;border-radius:14px;display:block}
 .login-logo svg{display:block}
-.login-title{font-size:24px;font-weight:800;color:var(--navy);letter-spacing:-.03em;line-height:1.05;margin-bottom:6px}
-.login-sub{font-size:14px;color:var(--muted);line-height:1.45;margin-bottom:22px}
+.login-title{font-size:33px;font-weight:800;color:var(--navy);letter-spacing:-.05em;line-height:1;margin-bottom:4px}
+.login-sub{font-size:10.5px;color:var(--muted);line-height:1.4;margin-bottom:22px;letter-spacing:1.2px;text-transform:uppercase;font-weight:500}
 .login-form{display:flex;flex-direction:column;gap:13px}
 .login-field label{font-size:12px;font-weight:700;color:var(--navy);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.45px}
 .login-field input{
@@ -717,17 +719,17 @@ body:not(.role-user) .user-only{display:none!important}
 .login-blob{position:absolute;border-radius:50%;pointer-events:none;z-index:0}
 .login-blob-1{
   width:360px;height:360px;top:-130px;left:-130px;
-  background:radial-gradient(circle,rgba(243,200,75,.24),transparent 68%);
+  background:radial-gradient(circle,rgba(135,186,56,.2),transparent 68%);
   animation:blob1 9s ease-in-out infinite;
 }
 .login-blob-2{
   width:300px;height:300px;bottom:-90px;right:-90px;
-  background:radial-gradient(circle,rgba(29,111,164,.2),transparent 68%);
+  background:radial-gradient(circle,rgba(34,136,168,.2),transparent 68%);
   animation:blob2 11s ease-in-out infinite;
 }
 .login-blob-3{
   width:220px;height:220px;top:35%;right:-70px;
-  background:radial-gradient(circle,rgba(14,124,123,.16),transparent 68%);
+  background:radial-gradient(circle,rgba(42,192,204,.14),transparent 68%);
   animation:blob3 13s ease-in-out infinite reverse;
 }
 .login-card{position:relative;z-index:1}
@@ -735,7 +737,7 @@ body:not(.role-user) .user-only{display:none!important}
 .login-logo-svg{
   width:58px;height:58px;display:block;
   animation:logoFloat 4s ease-in-out infinite;
-  filter:drop-shadow(0 6px 18px rgba(15,39,68,.2)) drop-shadow(0 0 14px rgba(243,200,75,.28));
+  filter:drop-shadow(0 6px 18px rgba(24,78,120,.2)) drop-shadow(0 0 14px rgba(135,186,56,.24));
 }
 /* Login logo box más premium */
 .login-logo{
@@ -745,7 +747,7 @@ body:not(.role-user) .user-only{display:none!important}
     0 2px 0 rgba(255,255,255,.9) inset,
     0 0 0 1px rgba(95,169,178,.22),
     0 10px 28px rgba(15,39,68,.13),
-    0 3px 10px rgba(243,200,75,.22);
+    0 3px 10px rgba(135,186,56,.2);
 }
 /* Login card sombra más profunda */
 .login-card{
@@ -763,17 +765,17 @@ body:not(.role-user) .user-only{display:none!important}
     0 10px 28px rgba(15,39,68,.05);
 }
 /* KPI números con glow */
-.kpi.c-blue .kpi-n{text-shadow:0 0 22px rgba(46,134,193,.38)}
-.kpi.c-teal .kpi-n{text-shadow:0 0 22px rgba(18,160,158,.36)}
+.kpi.c-blue .kpi-n{text-shadow:0 0 22px rgba(34,136,168,.36)}
+.kpi.c-teal .kpi-n{text-shadow:0 0 22px rgba(42,192,204,.34)}
 .kpi.c-red  .kpi-n{text-shadow:0 0 22px rgba(192,57,43,.3)}
 /* AppBar sombra más pronunciada */
-.bar{box-shadow:0 2px 18px rgba(0,0,0,.28),0 1px 0 rgba(255,255,255,.07) inset}
+.bar{box-shadow:0 2px 18px rgba(24,78,120,.3),0 1px 0 rgba(255,255,255,.07) inset}
 /* Nav blur glass */
 .nav{
   backdrop-filter:blur(16px) saturate(1.8);
   -webkit-backdrop-filter:blur(16px) saturate(1.8);
   background:rgba(255,255,255,.94);
-  box-shadow:0 -2px 20px rgba(15,39,68,.1),0 -1px 0 rgba(15,39,68,.05);
+  box-shadow:0 -2px 20px rgba(24,78,120,.1),0 -1px 0 rgba(24,78,120,.05);
 }
 /* Indicador activo en nav */
 .ni.on{position:relative}
@@ -806,8 +808,8 @@ body:not(.role-user) .user-only{display:none!important}
   <div class="login-blob login-blob-3" aria-hidden="true"></div>
   <div class="login-card">
     <div class="login-logo"><img src="data:image/png;base64,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" alt="Logo SIPROSA"></div>
-    <div class="login-title">Ingreso al sistema</div>
-    <div class="login-sub">Investigación de Accidentes · SIPROSA</div>
+    <div class="login-title">SIPROSA</div>
+    <div class="login-sub">Investigación de Accidentes</div>
     <form class="login-form" onsubmit="doLogin(event)">
       <div class="login-field">
         <label>Usuario</label>
@@ -1139,7 +1141,7 @@ async function pingConexion(){
 //  DATOS MAESTROS EMBEBIDOS
 // ════════════════════════════════════════════════════════════════════
 const D = {
-  tipo_evento:[{c:'AT',d:'Accidente de Trabajo'},{c:'EP',d:'Enfermedad Profesional'}],
+  tipo_evento:[{c:'AT',d:'Accidente Laboral'},{c:'AIT',d:'Accidente In Itinere'},{c:'EP',d:'Enfermedad Profesional'}],
   tipo_lugar:[{c:'EN_ESTABLECIMIENTO',d:'En el establecimiento'},{c:'VIA_PUBLICA',d:'Vía pública'},{c:'SALIDA_OFICIAL',d:'Salida oficial'},{c:'IN_ITINERE',d:'In itinere'}],
   tipo_contratacion:[{c:'PERMANENTE',d:'Permanente'},{c:'TRANSITORIO',d:'Transitorio'},{c:'REEMPLAZO',d:'Reemplazo'},{c:'RESIDENTE',d:'Residente'},{c:'OTROS',d:'Otros'}],
   medio_traslado:[{c:'VEHICULO_OFICIAL',d:'Vehículo oficial'},{c:'TRANSPORTE_PUBLICO',d:'Transporte público'},{c:'VEHICULO_PARTICULAR',d:'Vehículo particular'},{c:'PEATON',d:'Peatón'}],
@@ -1356,8 +1358,9 @@ function renderStep0(body){
   <div class="fsec"><div class="fsec-title">Identificación del informe</div>
     <div class="f"><label>Tipo de evento <span class="req">*</span></label>
       <div class="rtabs">
-        <button type="button" class="rtab ${d.tipo_evento!=='EP'?'on':''}" onclick="setRtab(this,'tipo_evento','AT')">AT</button>
-        <button type="button" class="rtab ${d.tipo_evento==='EP'?'on':''}" onclick="setRtab(this,'tipo_evento','EP')">EP</button>
+        <button type="button" class="rtab ${d.tipo_evento==='AT'||!d.tipo_evento?'on':''}" onclick="setRtab(this,'tipo_evento','AT')">Laboral</button>
+        <button type="button" class="rtab ${d.tipo_evento==='AIT'?'on':''}" onclick="setRtab(this,'tipo_evento','AIT')">In itinere</button>
+        <button type="button" class="rtab ${d.tipo_evento==='EP'?'on':''}" onclick="setRtab(this,'tipo_evento','EP')">Enf. Prof.</button>
       </div>
       <input type="hidden" id="tipo_evento" name="tipo_evento" value="${d.tipo_evento||'AT'}">
     </div>
