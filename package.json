@@ -2,8 +2,14 @@
   "name": "siprosa-accidentes",
   "version": "1.0.0",
   "private": true,
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4"
+  },
+  "devDependencies": {
+    "dotenv": "^18.0.4",
+    "xlsx": "^0.18.5"
   }
 }
