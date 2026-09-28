@@ -486,11 +486,58 @@ async function getDashboard(filters, sql) {
     ok: true, data: {
       total: rows.length,
       accidentes_trabajo: rows.filter(r => String(r.tipo_evento).toUpperCase() === 'AT').length,
+      accidentes_in_itinere: rows.filter(r => String(r.tipo_evento).toUpperCase() === 'AIT').length,
       enfermedades_profesionales: rows.filter(r => String(r.tipo_evento).toUpperCase() === 'EP').length,
       borradores: rows.filter(r => String(r.estado).toUpperCase() === 'BORRADOR').length,
       anuladas: rows.filter(r => String(r.estado).toUpperCase() === 'ANULADA').length
     }
   };
+}
+
+// ── AVISOS ────────────────────────────────────────────────────────────
+async function getAvisos(sql) {
+  const rows = await sql(
+    `SELECT * FROM avisos WHERE activo = 'SI' ORDER BY fecha_publicacion DESC`
+  );
+  return { ok: true, data: rows };
+}
+
+async function crearAviso(data, userEmail, sql) {
+  data = data || {};
+  if (!data.titulo) throw new Error('Falta título del aviso');
+  const tipo = ['ALERTA','CAPACITACION','INFORMACION'].includes(String(data.tipo||'').toUpperCase())
+    ? String(data.tipo).toUpperCase() : 'INFORMACION';
+  const id = data.id_aviso || generateId('AVI');
+  await sql(
+    `INSERT INTO avisos (id_aviso, tipo, titulo, cuerpo, activo, fecha_publicacion, fecha_vencimiento, usuario_carga)
+     VALUES ($1, $2, $3, $4, 'SI', NOW(), $5, $6)`,
+    [id, tipo, data.titulo, data.cuerpo || '', data.fecha_vencimiento || '', userEmail]
+  );
+  await logAction('crearAviso', 'Avisos', id, data.titulo, userEmail, sql);
+  return { ok: true, data: { id_aviso: id, tipo, titulo: data.titulo } };
+}
+
+async function editarAviso(id_aviso, data, userEmail, sql) {
+  if (!id_aviso) throw new Error('Falta id_aviso');
+  const keys = [], vals = [];
+  if (data.titulo !== undefined) { keys.push('titulo'); vals.push(data.titulo); }
+  if (data.cuerpo !== undefined) { keys.push('cuerpo'); vals.push(data.cuerpo); }
+  if (data.tipo !== undefined) { keys.push('tipo'); vals.push(data.tipo); }
+  if (data.activo !== undefined) { keys.push('activo'); vals.push(data.activo); }
+  if (data.fecha_vencimiento !== undefined) { keys.push('fecha_vencimiento'); vals.push(data.fecha_vencimiento); }
+  if (!keys.length) return { ok: true };
+  const sets = keys.map((k, i) => `"${k}" = $${i + 1}`).join(', ');
+  vals.push(id_aviso);
+  await sql(`UPDATE avisos SET ${sets} WHERE id_aviso = $${vals.length}`, vals);
+  await logAction('editarAviso', 'Avisos', id_aviso, '', userEmail, sql);
+  return { ok: true };
+}
+
+async function eliminarAviso(id_aviso, userEmail, sql) {
+  if (!id_aviso) throw new Error('Falta id_aviso');
+  await sql(`UPDATE avisos SET activo = 'NO' WHERE id_aviso = $1`, [id_aviso]);
+  await logAction('eliminarAviso', 'Avisos', id_aviso, 'Baja lógica', userEmail, sql);
+  return { ok: true };
 }
 
 // ── MAIN HANDLER ──────────────────────────────────────────────────────
@@ -532,7 +579,8 @@ module.exports = async function handler(req, res) {
 
     const adminActions = ['listarUsuarios','crearUsuario','editarUsuario','eliminarUsuario',
       'crearAgente','editarAgente','eliminarAgente','eliminarInvestigacion',
-      'estadoIndiceAgentes','reconstruirIndiceAgentes'];
+      'estadoIndiceAgentes','reconstruirIndiceAgentes',
+      'crearAviso','editarAviso','eliminarAviso'];
     if (adminActions.includes(action) && (!authUser || authUser.rol !== 'admin')) {
       throw new Error('No autorizado: esta acción requiere usuario admin');
     }
@@ -578,6 +626,12 @@ module.exports = async function handler(req, res) {
 
       // Dashboard
       case 'getDashboard':  result = await getDashboard(body.filters || {}, sql); break;
+
+      // Avisos
+      case 'getAvisos':      result = await getAvisos(sql); break;
+      case 'crearAviso':     result = await crearAviso(body.data || body, userEmail, sql); break;
+      case 'editarAviso':    result = await editarAviso(body.id_aviso, body.data || body, userEmail, sql); break;
+      case 'eliminarAviso':  result = await eliminarAviso(body.id_aviso, userEmail, sql); break;
 
       // Config
       case 'getConfig': {

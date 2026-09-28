@@ -899,6 +899,10 @@ body:not(.role-user) .user-only{display:none!important}
 }
 .home-tile-badge.hid{display:none}
 
+/* Config tile oculta para usuarios normales */
+.role-user .home-tile.admin-only{display:none}
+.role-user .home-tile:nth-child(3){grid-column:1/-1;padding:24px 16px}
+
 /* Bell button en appbar */
 .bell-btn{
   position:relative;
@@ -1021,7 +1025,7 @@ body:not(.role-user) .user-only{display:none!important}
         <span class="home-tile-label">Avisos</span>
         <span class="home-tile-badge hid" id="avisosBadge">0</span>
       </button>
-      <button class="home-tile" onclick="nav('config')">
+      <button class="home-tile admin-only" onclick="nav('config')">
         <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.35 1.05V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1.05-.35H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6A1.65 1.65 0 0 0 10.35 3V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.3.36.56.6.8.3.3.66.48 1.05.55H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51.65z"/></svg>
         <span class="home-tile-label">Configuración</span>
       </button>
@@ -1046,7 +1050,7 @@ body:not(.role-user) .user-only{display:none!important}
     </div>
     <div class="sb">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input id="invQ" type="search" placeholder="Agente, nº ficha, efector…" oninput="debInv()">
+      <input id="invQ" type="search" placeholder="Agente, nº registro, efector…" oninput="debInv()">
     </div>
     <div class="chips">
       <button class="chip on" onclick="setInvFiltro(this,'')">Todas</button>
@@ -1158,7 +1162,7 @@ body:not(.role-user) .user-only{display:none!important}
   </button>
   <button class="ni" id="ni-investigaciones" onclick="nav('investigaciones')">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-    Fichas
+    Registros
   </button>
   <button class="ni" id="ni-agentes" onclick="nav('agentes')">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -1176,7 +1180,7 @@ body:not(.role-user) .user-only{display:none!important}
     <div class="sheet-handle"></div>
     <div class="sheet-hdr">
       <div>
-        <div class="sheet-title" id="invFormTitle">Nueva Ficha</div>
+        <div class="sheet-title" id="invFormTitle">Nueva Investigación</div>
         <div class="stepper" id="stepDots"></div>
         <div class="step-prog" id="stepProg"></div>
       </div>
@@ -1205,7 +1209,7 @@ body:not(.role-user) .user-only{display:none!important}
     <div class="sheet-ftr">
       <button class="btn btn-ghost" onclick="closeModal('ovDetalle')">Cerrar</button>
       <button class="btn btn-secondary" id="btnArt">PDF ART</button>
-      <button class="btn btn-primary" id="btnFicha">PDF Ficha</button>
+      <button class="btn btn-primary" id="btnFicha">PDF Registro</button>
     </div>
   </div>
 </div>
@@ -1289,6 +1293,7 @@ function enterApp(){
   document.getElementById('lblConn').textContent=u.nombre||u.usuario||'Usuario';
   document.getElementById('lblRole').textContent=u.rol||'user';
   nav('dashboard');
+  checkAvisosBadge();
 }
 function logout(show=true){
   AUTH=null;
@@ -1368,11 +1373,59 @@ function sel(name, field, val='', req=false){
 // ════════════════════════════════════════════════════════════════════
 //  AVISOS
 // ════════════════════════════════════════════════════════════════════
-function loadAvisos(){
-  const badgeEl=document.getElementById('avisosBadge');
-  const bellDot=document.getElementById('bellDot');
-  if(badgeEl) badgeEl.classList.add('hid');
-  if(bellDot) bellDot.classList.add('hid');
+const LS_AVISOS='siprosa_avisos_seen';
+
+async function checkAvisosBadge(){
+  try{
+    const r=await api('getAvisos');
+    const avisos=r.data||[];
+    let lastSeen=0;
+    try{lastSeen=parseInt(localStorage.getItem(LS_AVISOS)||'0');}catch(_){}
+    const unread=avisos.filter(a=>new Date(a.fecha_publicacion).getTime()>lastSeen).length;
+    const badgeEl=document.getElementById('avisosBadge');
+    const bellDot=document.getElementById('bellDot');
+    if(badgeEl){
+      if(unread>0){badgeEl.textContent=unread;badgeEl.classList.remove('hid');}
+      else badgeEl.classList.add('hid');
+    }
+    if(bellDot) bellDot.classList.toggle('hid',unread===0);
+  }catch(_){}
+}
+
+async function loadAvisos(){
+  try{
+    const r=await api('getAvisos');
+    const avisos=r.data||[];
+    // Marcar como vistos
+    try{localStorage.setItem(LS_AVISOS,Date.now().toString());}catch(_){}
+    // Ocultar badge
+    const badgeEl=document.getElementById('avisosBadge');
+    const bellDot=document.getElementById('bellDot');
+    if(badgeEl)badgeEl.classList.add('hid');
+    if(bellDot)bellDot.classList.add('hid');
+    // Renderizar por tipo
+    renderAvisosLista('avisosAlertas',avisos.filter(a=>a.tipo==='ALERTA'));
+    renderAvisosLista('avisosCaps',avisos.filter(a=>a.tipo==='CAPACITACION'));
+    renderAvisosLista('avisosInfo',avisos.filter(a=>a.tipo==='INFORMACION'));
+  }catch(e){
+    ['avisosAlertas','avisosCaps','avisosInfo'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el)el.innerHTML='<div class="avisos-empty">No disponible</div>';
+    });
+  }
+}
+
+function renderAvisosLista(id,items){
+  const el=document.getElementById(id);
+  if(!el)return;
+  if(!items||!items.length){el.innerHTML='<div class="avisos-empty">Sin novedades</div>';return;}
+  el.innerHTML=items.map(a=>`
+    <div class="aviso-card">
+      <div class="aviso-titulo">${esc(a.titulo)}</div>
+      ${a.cuerpo?`<div class="aviso-cuerpo">${esc(a.cuerpo)}</div>`:''}
+      <div class="aviso-fecha">${fmt(a.fecha_publicacion)}</div>
+    </div>
+  `).join('');
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1491,7 +1544,7 @@ function renderDetalle(inv){
   };
   return `
   <div class="det-sec"><div class="det-sec-t">Identificación</div>
-    ${row('N° Ficha',inv.numero_ficha)} ${row('Estado',inv.estado)} ${row('Efector',inv.efector)} ${row('Sector/Área',inv.sector_area)}
+    ${row('N° Registro',inv.numero_ficha)} ${row('Estado',inv.estado)} ${row('Efector',inv.efector)} ${row('Sector/Área',inv.sector_area)}
     ${row('Tipo evento',inv.tipo_evento)} ${row('Fecha incidente',fmt(inv.fecha_incidente))} ${row('Circuito otros',inv.circuito_otros_texto)}
   </div>
   <div class="det-sec"><div class="det-sec-t">Trabajador</div>
@@ -1546,10 +1599,10 @@ async function generarPdf(tipo, id, nombre){
 }
 
 async function anularInv(id){
-  if(!isAdmin()){ toast('Solo un admin puede anular fichas','err'); return; }
-  if(!confirm('¿Anular esta ficha?')) return;
+  if(!isAdmin()){ toast('Solo un admin puede anular registros','err'); return; }
+  if(!confirm('¿Anular este registro?')) return;
   showLoad();
-  try{ await api('eliminarInvestigacion',{id_investigacion:id,motivo:'Anulada desde sistema'}); toast('Ficha anulada','ok'); loadInv(); }
+  try{ await api('eliminarInvestigacion',{id_investigacion:id,motivo:'Anulada desde sistema'}); toast('Registro anulado','ok'); loadInv(); }
   catch(e){ toast(e.message,'err'); }
   finally{ hideLoad(); }
 }
@@ -1569,7 +1622,7 @@ const STEPS=[
 
 function openInvForm(id){
   _invId=id; _step=0; _invData={};
-  document.getElementById('invFormTitle').textContent=id?'Editar ficha':'Nueva ficha rápida';
+  document.getElementById('invFormTitle').textContent=id?'Editar registro':'Nuevo registro';
   if(id){ showLoad(); api('getInvestigacion',{id_investigacion:id}).then(r=>{ _invData=r.data||{}; hideLoad(); openModal('ovInv'); renderStep(); }).catch(e=>{ hideLoad(); toast(e.message,'err'); }); }
   else{ _invData={tipo_evento:'AT', estado:'BORRADOR', circuito_hys_siprosa:'SI'}; openModal('ovInv'); renderStep(); }
 }
@@ -1605,7 +1658,7 @@ function renderStep0(body){
     <input id="agtSrch" type="search" placeholder="Buscar por DNI, CUIL o apellido…" oninput="debAgtSrch(this.value)">
   </div><div id="agtRes" class="agt-results"><div style="padding:14px;font-size:13px;color:var(--muted)">Escribí al menos 2 caracteres.</div></div></div>`;
   body.innerHTML=`
-  <div class="quick-note">Ficha rápida: primero elegí el agente. Si el agente tiene establecimiento/sector cargado, se completa automáticamente.</div>
+  <div class="quick-note">Primero elegí el agente. Si tiene establecimiento/sector cargado, se completa automáticamente.</div>
   <div class="fsec"><div class="fsec-title">Identificación del informe</div>
     <div class="f"><label>Tipo de evento <span class="req">*</span></label>
       <div class="rtabs">
@@ -1797,7 +1850,7 @@ async function saveInv(){
     const payload=_invId?{id_investigacion:_invId,data:_invData}:{data:_invData};
     const r=await api(action,payload);
     closeModal('ovInv');
-    toast((_invId?'Ficha actualizada: ':'Nueva ficha: ')+(r.data&&r.data.numero_ficha||'guardada'),'ok');
+    toast((_invId?'Registro actualizado: ':'Nuevo registro: ')+(r.data&&r.data.numero_ficha||'guardado'),'ok');
     loadInv(); loadDashboard();
   }catch(e){ toast(e.message,'err'); }
   finally{ hideLoad(); }
