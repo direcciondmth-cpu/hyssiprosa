@@ -496,10 +496,15 @@ async function getDashboard(filters, sql) {
 
 // ── AVISOS ────────────────────────────────────────────────────────────
 async function getAvisos(sql) {
-  const rows = await sql(
-    `SELECT * FROM avisos WHERE activo = 'SI' ORDER BY fecha_publicacion DESC`
-  );
-  return { ok: true, data: rows };
+  try {
+    const rows = await sql(
+      `SELECT * FROM avisos WHERE activo = 'SI' ORDER BY fecha_publicacion DESC`
+    );
+    return { ok: true, data: rows };
+  } catch (e) {
+    // Tabla no existe aún (migración pendiente) — devuelve vacío en lugar de error
+    return { ok: true, data: [] };
+  }
 }
 
 async function crearAviso(data, userEmail, sql) {
