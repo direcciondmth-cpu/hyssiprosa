@@ -67,7 +67,7 @@ button,input,select,textarea{font-family:var(--f)}
    LAYOUT
 ═══════════════════════════════════════════════════════════ */
 .main{
-  padding-top:calc(var(--bar) + 14px);
+  padding-top:calc(var(--bar) + env(safe-area-inset-top,0px) + 14px);
   padding-bottom:calc(var(--nav) + var(--safe) + 16px);
   padding-left:14px;padding-right:14px;
   max-width:640px;margin:0 auto;
@@ -357,7 +357,8 @@ body{
 }
 button,input,select,textarea{font-family:var(--f)}
 .bar{
-  height:var(--bar);
+  height:calc(var(--bar) + env(safe-area-inset-top,0px));
+  padding-top:env(safe-area-inset-top,0px);
   background:linear-gradient(135deg, rgba(35,80,110,.98) 0%, rgba(52,100,122,.98) 40%, rgba(35,120,130,.97) 100%);
   border-bottom:1px solid rgba(255,255,255,.16);
   box-shadow:0 10px 28px rgba(22,44,60,.20);
