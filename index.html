@@ -41,9 +41,11 @@ button,input,select,textarea{font-family:var(--f)}
    APPBAR
 ═══════════════════════════════════════════════════════════ */
 .bar{
-  position:fixed;inset:0 0 auto 0;z-index:100;height:var(--bar);
+  position:fixed;inset:0 0 auto 0;z-index:100;
+  padding-top:env(safe-area-inset-top,0px);
+  height:calc(var(--bar) + env(safe-area-inset-top,0px));
   background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 100%);
-  display:flex;align-items:center;justify-content:space-between;padding:0 16px;
+  display:flex;align-items:center;justify-content:space-between;padding-left:16px;padding-right:16px;
   box-shadow:0 2px 10px rgba(0,0,0,.25);
 }
 .bar-brand{display:flex;align-items:center;gap:10px}
@@ -381,7 +383,7 @@ button,input,select,textarea{font-family:var(--f)}
 }
 .main{
   max-width:1180px;
-  padding-top:calc(var(--bar) + 20px);
+  padding-top:calc(var(--bar) + env(safe-area-inset-top,0px) + 20px);
   padding-left:max(16px, env(safe-area-inset-left));
   padding-right:max(16px, env(safe-area-inset-right));
   padding-bottom:calc(var(--nav) + var(--safe) + 26px);
@@ -540,7 +542,7 @@ button,input,select,textarea{font-family:var(--f)}
   .bar{padding:0 14px}
   .bar-title{font-size:14px}
   .bar-sub{font-size:10px}
-  .main{padding-top:calc(var(--bar) + 16px)}
+  .main{padding-top:calc(var(--bar) + env(safe-area-inset-top,0px) + 16px)}
   .ph h2{font-size:22px}
   .f-row,.f-row3{grid-template-columns:1fr}
   .det-row{flex-direction:column;gap:3px}
