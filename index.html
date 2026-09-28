@@ -849,6 +849,96 @@ body:not(.role-user) .user-only{display:none!important}
   background-clip:text;
 }
 
+
+/* ═══════════════════════════════════════════════════════════
+   NUEVO DISEÑO DE NAVEGACIÓN
+═══════════════════════════════════════════════════════════ */
+/* Oculta bottom nav — navegación via tiles + back btn */
+.nav{display:none!important}
+.main{padding-bottom:24px}
+
+/* Home grid 2×2 */
+.home-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:14px;
+  padding:6px 0 24px;
+}
+.home-tile{
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:12px;
+  background:#fff;border-radius:20px;
+  box-shadow:var(--sh);
+  cursor:pointer;border:none;font-family:inherit;
+  position:relative;color:var(--navy);
+  padding:28px 16px;
+  transition:transform .15s,box-shadow .15s;
+  text-align:center;
+}
+.home-tile:active{transform:scale(.97);box-shadow:var(--sh-lg)}
+.home-tile svg{color:var(--navy)}
+.home-tile-label{font-size:14px;font-weight:700;color:var(--navy);letter-spacing:-.02em}
+.home-tile-badge{
+  position:absolute;top:10px;right:10px;
+  min-width:20px;height:20px;
+  background:#e84545;border-radius:10px;color:#fff;
+  font-size:11px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  padding:0 5px;
+}
+.home-tile-badge.hid{display:none}
+
+/* Bell button en appbar */
+.bell-btn{
+  position:relative;
+  background:rgba(255,255,255,.12);border:none;color:#fff;
+  cursor:pointer;width:34px;height:34px;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:50%;transition:background .15s;flex-shrink:0;
+}
+.bell-btn:hover{background:rgba(255,255,255,.22)}
+.bell-dot{
+  position:absolute;top:7px;right:7px;
+  width:8px;height:8px;background:#f3c84b;
+  border-radius:50%;border:1.5px solid var(--navy);
+}
+.bell-dot.hid{display:none}
+
+/* Botón volver */
+.back-btn{
+  display:inline-flex;align-items:center;gap:3px;
+  background:none;border:none;
+  font-size:12px;font-weight:600;color:var(--navy);
+  cursor:pointer;padding:0;font-family:inherit;
+  opacity:.65;letter-spacing:.2px;margin-bottom:6px;
+}
+.back-btn:hover{opacity:1}
+.back-btn svg{flex-shrink:0}
+
+/* Mini-dash de módulo */
+.mini-dash{
+  display:grid;gap:8px;margin-bottom:14px;
+}
+.mini-kpi{
+  background:#fff;border-radius:12px;
+  padding:12px 8px 10px;
+  box-shadow:var(--sh);text-align:center;
+}
+.mini-kpi-n{font-size:22px;font-weight:700;color:var(--navy);letter-spacing:-.04em;line-height:1}
+.mini-kpi-l{font-size:9.5px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
+.mini-kpi.c-blue .mini-kpi-n{color:var(--blue)}
+.mini-kpi.c-teal .mini-kpi-n{color:var(--teal)}
+.mini-kpi.c-olive .mini-kpi-n{color:var(--olive)}
+
+/* Avisos */
+.avisos-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.aviso-card{background:#fff;border-radius:12px;padding:14px 16px;box-shadow:var(--sh)}
+.aviso-tipo{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:4px}
+.aviso-titulo{font-size:14px;font-weight:600;color:var(--navy)}
+.aviso-cuerpo{font-size:13px;color:var(--fg);margin-top:4px;line-height:1.45}
+.aviso-fecha{font-size:11px;color:var(--muted);margin-top:6px}
+.avisos-empty{text-align:center;padding:28px 0;color:var(--muted);font-size:13px}
 </style>
 </head>
 <body class="locked">
@@ -889,11 +979,17 @@ body:not(.role-user) .user-only{display:none!important}
       <div class="bar-sub">SIPROSA · Gestión y seguimiento digital</div>
     </div>
   </div>
+  <div style="display:flex;align-items:center;gap:6px">
+  <button class="bell-btn" onclick="nav('avisos')" title="Avisos">
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    <span class="bell-dot hid" id="bellDot"></span>
+  </button>
   <button class="bar-pill" onclick="logout()" title="Cerrar sesión">
     <span class="dot ok" id="dotConn"></span>
     <span class="user-pill" id="lblConn">Usuario</span>
     <span class="role-chip" id="lblRole">user</span>
   </button>
+  </div>
 </header>
 
 <!-- MAIN -->
@@ -901,38 +997,42 @@ body:not(.role-user) .user-only{display:none!important}
 
   <!-- DASHBOARD -->
   <section id="p-dashboard" class="panel on">
-    <div class="ph">
-      <h2>Resumen</h2>
-      <button class="btn-icon" onclick="loadDashboard()" title="Actualizar">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+    <div class="home-grid">
+      <button class="home-tile" onclick="nav('agentes')">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span class="home-tile-label">Agentes</span>
       </button>
-    </div>
-    <div class="kpi-grid" id="kpiGrid">
-      <div class="kpi sk"></div><div class="kpi sk"></div>
-      <div class="kpi sk"></div><div class="kpi sk"></div>
-    </div>
-    <div class="sec-label">Acceso rápido</div>
-    <div class="qa-row">
-      <button class="qa" onclick="nav('investigaciones');setTimeout(()=>openInvForm(null),150)">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-        Nueva Ficha
+      <button class="home-tile" onclick="nav('investigaciones')">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        <span class="home-tile-label">Registros</span>
       </button>
-      <button class="qa admin-only" onclick="nav('agentes');setTimeout(()=>openAgtForm(null),150)">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        Nuevo Agente
+      <button class="home-tile" onclick="nav('avisos')">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span class="home-tile-label">Avisos</span>
+        <span class="home-tile-badge hid" id="avisosBadge">0</span>
       </button>
-      <button class="qa user-only" onclick="nav('agentes')">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M8 11h6"/></svg>
-        Consultar Agentes
+      <button class="home-tile" onclick="nav('config')">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.35 1.05V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1.05-.35H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6A1.65 1.65 0 0 0 10.35 3V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.3.36.56.6.8.3.3.66.48 1.05.55H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51.65z"/></svg>
+        <span class="home-tile-label">Configuración</span>
       </button>
     </div>
   </section>
 
   <!-- INVESTIGACIONES -->
   <section id="p-investigaciones" class="panel">
-    <div class="ph">
-      <h2>Fichas</h2>
+    <button class="back-btn" onclick="nav('dashboard')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      Inicio
+    </button>
+    <div class="ph" style="margin-top:2px;margin-bottom:12px">
+      <h2>Registros</h2>
       <button class="btn-sm-primary" onclick="openInvForm(null)">+ Nueva</button>
+    </div>
+    <div class="mini-dash" id="regMiniDash" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
+      <div class="mini-kpi"><div class="mini-kpi-n" id="mkReg0">—</div><div class="mini-kpi-l">Total</div></div>
+      <div class="mini-kpi c-blue"><div class="mini-kpi-n" id="mkReg1">—</div><div class="mini-kpi-l">Laboral</div></div>
+      <div class="mini-kpi c-teal"><div class="mini-kpi-n" id="mkReg2">—</div><div class="mini-kpi-l">In Itinere</div></div>
+      <div class="mini-kpi c-olive"><div class="mini-kpi-n" id="mkReg3">—</div><div class="mini-kpi-l">Enf. Prof.</div></div>
     </div>
     <div class="sb">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -950,9 +1050,17 @@ body:not(.role-user) .user-only{display:none!important}
 
   <!-- AGENTES -->
   <section id="p-agentes" class="panel">
-    <div class="ph">
+    <button class="back-btn" onclick="nav('dashboard')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      Inicio
+    </button>
+    <div class="ph" style="margin-top:2px;margin-bottom:12px">
       <h2>Agentes</h2>
       <button class="btn-sm-primary admin-only" onclick="openAgtForm(null)">+ Nuevo</button>
+    </div>
+    <div class="mini-dash" id="agtMiniDash" style="grid-template-columns:1fr 1fr;margin-bottom:14px">
+      <div class="mini-kpi"><div class="mini-kpi-n" id="mkAgt0">—</div><div class="mini-kpi-l">Total fichas</div></div>
+      <div class="mini-kpi c-blue"><div class="mini-kpi-n" id="mkAgt1">—</div><div class="mini-kpi-l">Borradores</div></div>
     </div>
     <div class="perf-note">Para que sea rápido con más de 20.000 agentes, buscá con al menos 3 caracteres. La app consulta un índice liviano y no trae toda la base.</div>
     <div class="sb">
@@ -963,14 +1071,19 @@ body:not(.role-user) .user-only{display:none!important}
   </section>
 
   <!-- CONFIG ADMIN -->
-  <section id="p-config" class="panel admin-only">
-    <div class="ph">
+  <section id="p-config" class="panel">
+    <button class="back-btn" onclick="nav('dashboard')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      Inicio
+    </button>
+    <div class="ph" style="margin-top:2px;margin-bottom:12px">
       <h2>Configuración</h2>
       <button class="btn-icon" onclick="loadConfigAdmin()" title="Actualizar">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
       </button>
     </div>
-    <div class="cfg-grid-v4">
+    <div class="user-only" style="padding:32px 0;text-align:center;color:var(--muted);font-size:14px">Solo administradores pueden acceder a esta sección.</div>
+    <div class="cfg-grid-v4 admin-only" style="margin-top:12px">
       <div class="cfg-card">
         <div class="cfg-label">Índice de agentes</div>
         <div class="cfg-desc">Necesario para que la búsqueda sea rápida con bases grandes. Reconstruirlo después de importar/pegar muchos agentes.</div>
@@ -992,8 +1105,37 @@ body:not(.role-user) .user-only{display:none!important}
         <div id="usuariosList" style="margin-top:14px"></div>
       </div>
     </div>
-    <div class="cfg-credit">
+    <div class="cfg-credit admin-only">
       Diseño de interfaz · <a href="https://www.instagram.com/soypulsocreativo" target="_blank" rel="noopener">@soypulsocreativo</a>
+    </div>
+  </section>
+
+
+  <!-- AVISOS -->
+  <section id="p-avisos" class="panel">
+    <button class="back-btn" onclick="nav('dashboard')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      Inicio
+    </button>
+    <div class="ph" style="margin-top:2px;margin-bottom:16px">
+      <h2>Avisos</h2>
+    </div>
+    <div class="sec-label">Alertas</div>
+    <div class="avisos-list" id="avisosAlertas">
+      <div class="avisos-empty">Sin alertas activas</div>
+    </div>
+    <div class="sec-label" style="margin-top:20px">Capacitaciones</div>
+    <div class="avisos-list" id="avisosCaps">
+      <div class="avisos-empty">Sin capacitaciones programadas</div>
+    </div>
+    <div class="sec-label" style="margin-top:20px">Información</div>
+    <div class="avisos-list" id="avisosInfo">
+      <div class="aviso-card">
+        <div class="aviso-tipo">Sistema</div>
+        <div class="aviso-titulo">SIPROSA · Investigación de Accidentes</div>
+        <div class="aviso-cuerpo">Sistema Provincial de Salud de Tucumán. Gestión y seguimiento digital de accidentes laborales, in itinere y enfermedades profesionales.</div>
+        <div class="aviso-fecha">Dirección General de Informática Médica · DGIME</div>
+      </div>
     </div>
   </section>
 
@@ -1138,7 +1280,6 @@ function enterApp(){
   document.getElementById('lblConn').textContent=u.nombre||u.usuario||'Usuario';
   document.getElementById('lblRole').textContent=u.rol||'user';
   nav('dashboard');
-  loadDashboard();
 }
 function logout(show=true){
   AUTH=null;
@@ -1165,13 +1306,17 @@ function closeModal(id){ document.getElementById(id).classList.add('hid') }
 function openModal(id){ document.getElementById(id).classList.remove('hid') }
 
 function nav(p){
+  if(p==='inicio') p='dashboard';
   document.querySelectorAll('.panel').forEach(x=>x.classList.remove('on'));
   document.querySelectorAll('.ni').forEach(x=>x.classList.remove('on'));
-  document.getElementById('p-'+p).classList.add('on');
-  document.getElementById('ni-'+p).classList.add('on');
-  if(p==='investigaciones') loadInv();
-  if(p==='agentes') loadAgentes();
+  const panel=document.getElementById('p-'+p);
+  if(panel) panel.classList.add('on');
+  const niBtn=document.getElementById('ni-'+p);
+  if(niBtn) niBtn.classList.add('on');
+  if(p==='investigaciones'){ loadInv(); loadRegMiniDash(); }
+  if(p==='agentes'){ loadAgentes(); loadAgtMiniDash(); }
   if(p==='config') loadConfigAdmin();
+  if(p==='avisos') loadAvisos();
 }
 
 function fmt(v){ if(!v) return '—'; const d=new Date(v); return isNaN(d)?v:d.toLocaleDateString('es-AR'); }
@@ -1209,6 +1354,51 @@ const D = {
 function sel(name, field, val='', req=false){
   const opts=D[name].map(x=>`<option value="${x.c}" ${x.c===val?'selected':''}>${x.d}</option>`).join('');
   return `<select id="${field}" name="${field}"${req?' required':''}><option value="">— Seleccioná —</option>${opts}</select>`;
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  AVISOS
+// ════════════════════════════════════════════════════════════════════
+function loadAvisos(){
+  const badgeEl=document.getElementById('avisosBadge');
+  const bellDot=document.getElementById('bellDot');
+  if(badgeEl) badgeEl.classList.add('hid');
+  if(bellDot) bellDot.classList.add('hid');
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  MINI-DASH POR MÓDULO
+// ════════════════════════════════════════════════════════════════════
+async function loadRegMiniDash(){
+  const ids=['mkReg0','mkReg1','mkReg2','mkReg3'];
+  ids.forEach(id=>{const el=document.getElementById(id);if(el)el.textContent='…'});
+  try{
+    const r=await api('getDashboard');
+    const d=r.data;
+    const vals=[
+      d.total,
+      d.accidentes_trabajo,
+      d.accidentes_in_itinere!=null?d.accidentes_in_itinere:'—',
+      d.enfermedades_profesionales
+    ];
+    ids.forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=vals[i]??'—'});
+  }catch(e){
+    ids.forEach(id=>{const el=document.getElementById(id);if(el)el.textContent='—'});
+  }
+}
+
+async function loadAgtMiniDash(){
+  const e0=document.getElementById('mkAgt0');
+  const e1=document.getElementById('mkAgt1');
+  if(e0)e0.textContent='…'; if(e1)e1.textContent='…';
+  try{
+    const r=await api('getDashboard');
+    const d=r.data;
+    if(e0)e0.textContent=d.total??'—';
+    if(e1)e1.textContent=d.borradores??'—';
+  }catch(e){
+    if(e0)e0.textContent='—'; if(e1)e1.textContent='—';
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════
