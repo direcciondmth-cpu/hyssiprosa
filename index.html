@@ -855,14 +855,23 @@ body:not(.role-user) .user-only{display:none!important}
 ═══════════════════════════════════════════════════════════ */
 /* Oculta bottom nav — navegación via tiles + back btn */
 .nav{display:none!important}
-.main{padding-bottom:24px}
+.main{padding-bottom:calc(24px + env(safe-area-inset-bottom, 0px))}
+
+/* Panel inicio — centra el grid verticalmente */
+#p-dashboard.on{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:calc(100dvh - var(--bar) - 40px);
+}
 
 /* Home grid 2×2 */
 .home-grid{
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:14px;
-  padding:6px 0 24px;
+  width:100%;
+  padding:8px 0;
 }
 .home-tile{
   display:flex;flex-direction:column;
@@ -872,9 +881,10 @@ body:not(.role-user) .user-only{display:none!important}
   box-shadow:var(--sh);
   cursor:pointer;border:none;font-family:inherit;
   position:relative;color:var(--navy);
-  padding:28px 16px;
+  padding:32px 16px;
   transition:transform .15s,box-shadow .15s;
   text-align:center;
+  min-height:120px;
 }
 .home-tile:active{transform:scale(.97);box-shadow:var(--sh-lg)}
 .home-tile svg{color:var(--navy)}
@@ -1062,12 +1072,11 @@ body:not(.role-user) .user-only{display:none!important}
       <div class="mini-kpi"><div class="mini-kpi-n" id="mkAgt0">—</div><div class="mini-kpi-l">Total fichas</div></div>
       <div class="mini-kpi c-blue"><div class="mini-kpi-n" id="mkAgt1">—</div><div class="mini-kpi-l">Borradores</div></div>
     </div>
-    <div class="perf-note">Para que sea rápido con más de 20.000 agentes, buscá con al menos 3 caracteres. La app consulta un índice liviano y no trae toda la base.</div>
     <div class="sb">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input id="agtQ" type="search" placeholder="Mínimo 3 caracteres: CUIL, DNI, apellido, efector…" oninput="debAgt()">
+      <input id="agtQ" type="search" placeholder="CUIL, DNI, apellido, efector…" oninput="debAgt()">
     </div>
-    <div id="agtList" class="card-list"><div class="empty"><p>Escribí al menos 3 caracteres para buscar.</p></div></div>
+    <div id="agtList" class="card-list"><div class="empty"><p>Buscá por CUIL, DNI, apellido o efector.</p></div></div>
   </section>
 
   <!-- CONFIG ADMIN -->
@@ -1650,7 +1659,7 @@ function debAgtSrch(q){ clearTimeout(_agtBusqT); _agtBusqT=setTimeout(()=>buscar
 async function buscarAgtInForm(q){
   const box=document.getElementById('agtRes');
   if(!box) return;
-  if(!q||q.trim().length<3){ box.innerHTML='<div style="padding:14px;font-size:13px;color:var(--muted)">Escribí al menos 3 caracteres.</div>'; return; }
+  if(!q||!q.trim()){ box.innerHTML='<div style="padding:14px;font-size:13px;color:var(--muted)">Escribí para buscar.</div>'; return; }
   box.innerHTML='<div style="padding:14px;font-size:13px;color:var(--muted)">Buscando…</div>';
   try{
     const r=await api('buscarAgentes',{query:q,limit:15});
@@ -1805,7 +1814,7 @@ function debAgt(){ clearTimeout(_agtDebT); _agtDebT=setTimeout(loadAgentes,600) 
 async function loadAgentes(){
   const q=document.getElementById('agtQ').value.trim();
   const el=document.getElementById('agtList');
-  if(!q || q.length<3){ el.innerHTML='<div class="empty"><p>Escribí al menos 3 caracteres para buscar. Ej: apellido, DNI, CUIL o efector.</p></div>'; return; }
+  if(!q){ el.innerHTML='<div class="empty"><p>Buscá por CUIL, DNI, apellido o efector.</p></div>'; return; }
   el.innerHTML='<div class="kpi sk" style="height:56px"></div>';
   try{
     const r=await api('buscarAgentes',{query:q,limit:25});

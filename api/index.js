@@ -206,8 +206,8 @@ async function eliminarUsuario(id_usuario, sql) {
 async function buscarAgentes(query, limit, sql) {
   query = String(query || '').trim();
   limit = Math.min(Number(limit || 20), 50);
-  if (!query || query.length < 3) {
-    return { ok: true, data: [], meta: { min_chars: 3, message: 'Escribí al menos 3 caracteres para buscar en la base de agentes.' } };
+  if (!query) {
+    return { ok: true, data: [], meta: { message: 'Ingresá un criterio de búsqueda.' } };
   }
   const tokens = normalizar(query).split(' ').filter(Boolean).slice(0, 5);
   const conditions = tokens.map((_, i) => `search_key LIKE $${i + 1}`).join(' AND ');
