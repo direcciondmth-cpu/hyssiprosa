@@ -68,7 +68,7 @@ button,input,select,textarea{font-family:var(--f)}
    LAYOUT
 ═══════════════════════════════════════════════════════════ */
 .main{
-  padding-top:calc(var(--bar) + env(safe-area-inset-top,0px) + 30px);
+  padding-top:calc(env(safe-area-inset-top,0px) + 24px);
   padding-bottom:calc(var(--nav) + var(--safe) + 16px);
   padding-left:14px;padding-right:14px;
   max-width:640px;margin:0 auto;
@@ -383,7 +383,7 @@ button,input,select,textarea{font-family:var(--f)}
 .bar-sub{font-size:11px;color:rgba(255,255,255,.78)}
 .main{
   max-width:1180px;
-  padding-top:calc(var(--bar) + env(safe-area-inset-top,0px) + 36px);
+  padding-top:calc(env(safe-area-inset-top,0px) + 24px);
   padding-left:max(16px, env(safe-area-inset-left));
   padding-right:max(16px, env(safe-area-inset-right));
   padding-bottom:calc(var(--nav) + var(--safe) + 26px);
@@ -542,7 +542,7 @@ button,input,select,textarea{font-family:var(--f)}
   .bar{padding:0 14px}
   .bar-title{font-size:14px}
   .bar-sub{font-size:10px}
-  .main{padding-top:calc(var(--bar) + env(safe-area-inset-top,0px) + 32px)}
+  .main{padding-top:calc(env(safe-area-inset-top,0px) + 20px)}
   .ph h2{font-size:22px}
   .f-row,.f-row3{grid-template-columns:1fr}
   .det-row{flex-direction:column;gap:3px}
@@ -800,11 +800,35 @@ body:not(.role-user) .user-only{display:none!important}
 ═══════════════════════════════════════════════════════════ */
 .main{padding-bottom:calc(var(--nav) + env(safe-area-inset-bottom, 0px) + 24px)}
 
+/* Oculta appbar — navegación solo por nav inferior */
+.bar{display:none!important}
+
 /* Panel inicio */
-#p-dashboard.on{display:block;padding-top:28px}
-.home-greeting{margin-bottom:28px}
+#p-dashboard.on{display:block;padding-top:0}
+.home-greeting{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:24px;
+}
+.home-greeting-text{}
 .home-greeting-lbl{font-size:13px;font-weight:500;color:var(--muted);letter-spacing:.01em}
-.home-greeting-name{font-size:26px;font-weight:700;color:var(--navy);letter-spacing:-.03em;line-height:1.15;margin-top:2px}
+.home-greeting-name{font-size:24px;font-weight:700;color:var(--navy);letter-spacing:-.03em;line-height:1.15;margin-top:2px}
+.home-greeting-sub{display:flex;align-items:center;gap:6px;margin-top:6px}
+.home-greeting-avatar{
+  width:22px;height:22px;border-radius:50%;background:var(--navy);
+  display:flex;align-items:center;justify-content:center;
+  font-size:8px;font-weight:700;color:#fff;flex-shrink:0;
+}
+.home-greeting-role{font-size:10px;color:var(--muted)}
+.home-logo{
+  display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;cursor:pointer;
+}
+.home-logo-circle{
+  width:56px;height:56px;border-radius:50%;background:#fff;
+  border:1.5px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 10px rgba(35,80,110,.1);
+}
+.home-logo-lbl{font-size:7px;font-weight:700;color:var(--navy);letter-spacing:.5px;text-align:center}
 
 /* Home grid 2×2 */
 .home-grid{
@@ -951,8 +975,20 @@ body:not(.role-user) .user-only{display:none!important}
   <!-- DASHBOARD -->
   <section id="p-dashboard" class="panel on">
     <div class="home-greeting">
-      <div class="home-greeting-lbl">Bienvenido,</div>
-      <div class="home-greeting-name" id="greetingName">Usuario</div>
+      <div class="home-greeting-text">
+        <div class="home-greeting-lbl">Bienvenido,</div>
+        <div class="home-greeting-name" id="greetingName">Usuario</div>
+        <div class="home-greeting-sub">
+          <button class="home-greeting-avatar" id="avatarInitials2" onclick="logout()" title="Cerrar sesión">US</button>
+          <span class="home-greeting-role" id="lblRole2">user</span>
+        </div>
+      </div>
+      <div class="home-logo" onclick="logout()" title="Cerrar sesión">
+        <div class="home-logo-circle">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--navy)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="home-logo-lbl">DGIME</div>
+      </div>
     </div>
     <div class="home-grid">
       <button class="home-tile" onclick="nav('agentes')">
@@ -1238,8 +1274,12 @@ function enterApp(){
   const initials=(parts.length>=2?parts[0][0]+parts[parts.length-1][0]:fullName.slice(0,2)).toUpperCase();
   const av=document.getElementById('avatarInitials');
   if(av) av.textContent=initials;
+  const av2=document.getElementById('avatarInitials2');
+  if(av2) av2.textContent=initials;
   const gn=document.getElementById('greetingName');
   if(gn) gn.textContent=u.nombre||u.usuario||'Usuario';
+  const lr2=document.getElementById('lblRole2');
+  if(lr2) lr2.textContent=u.rol||'user';
   nav('dashboard');
   checkAvisosBadge();
 }
