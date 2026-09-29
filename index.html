@@ -798,9 +798,7 @@ body:not(.role-user) .user-only{display:none!important}
 /* ═══════════════════════════════════════════════════════════
    NUEVO DISEÑO DE NAVEGACIÓN
 ═══════════════════════════════════════════════════════════ */
-/* Oculta bottom nav — navegación via tiles + back btn */
-.nav{display:none!important}
-.main{padding-bottom:calc(24px + env(safe-area-inset-bottom, 0px))}
+.main{padding-bottom:calc(var(--nav) + env(safe-area-inset-bottom, 0px) + 24px)}
 
 /* Panel inicio */
 #p-dashboard.on{display:block;padding-top:28px}
