@@ -42,8 +42,8 @@ button,input,select,textarea{font-family:var(--f)}
 ═══════════════════════════════════════════════════════════ */
 .bar{
   position:fixed;inset:0 0 auto 0;z-index:100;
-  padding-top:env(safe-area-inset-top,0px);
-  height:calc(var(--bar) + env(safe-area-inset-top,0px));
+  padding-top:calc(env(safe-area-inset-top,0px) + 16px);
+  height:calc(var(--bar) + env(safe-area-inset-top,0px) + 16px);
   background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 100%);
   display:flex;align-items:center;justify-content:space-between;padding-left:16px;padding-right:16px;
   box-shadow:0 2px 10px rgba(0,0,0,.25);
@@ -53,12 +53,13 @@ button,input,select,textarea{font-family:var(--f)}
 .bar-icon svg{display:block}
 .bar-title{font-size:14px;font-weight:700;color:#fff;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bar-sub{font-size:11px;color:rgba(255,255,255,.5);letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bar-pill{
-  height:28px;padding:0 12px;border-radius:99px;border:none;cursor:pointer;
-  background:rgba(255,255,255,.12);color:rgba(255,255,255,.8);font-size:12px;font-weight:500;
-  display:flex;align-items:center;gap:5px;transition:background .15s;
+.bar-avatar{
+  width:34px;height:34px;border-radius:50%;border:1.5px solid rgba(255,255,255,.35);
+  background:rgba(255,255,255,.18);color:#fff;font-size:11px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  letter-spacing:.3px;transition:background .15s;flex-shrink:0;
 }
-.bar-pill:hover{background:rgba(255,255,255,.2)}
+.bar-avatar:hover{background:rgba(255,255,255,.28)}
 .dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.4);transition:all .3s}
 .dot.ok{background:#4ade80}
 .dot.err{background:#f87171}
@@ -67,7 +68,7 @@ button,input,select,textarea{font-family:var(--f)}
    LAYOUT
 ═══════════════════════════════════════════════════════════ */
 .main{
-  padding-top:calc(var(--bar) + env(safe-area-inset-top,0px) + 14px);
+  padding-top:calc(var(--bar) + env(safe-area-inset-top,0px) + 30px);
   padding-bottom:calc(var(--nav) + var(--safe) + 16px);
   padding-left:14px;padding-right:14px;
   max-width:640px;margin:0 auto;
@@ -82,19 +83,25 @@ button,input,select,textarea{font-family:var(--f)}
 .nav{
   position:fixed;bottom:0;left:0;right:0;z-index:100;
   height:calc(var(--nav) + var(--safe));
-  background:var(--surface);border-top:1.5px solid var(--border);
-  display:flex;align-items:flex-start;padding-top:6px;
-  box-shadow:0 -3px 14px rgba(15,39,68,.09);
+  background:#193446;border-top:none;
+  display:flex;align-items:flex-start;padding-top:8px;
+  box-shadow:0 -4px 24px rgba(15,30,50,.28);
 }
 .ni{
   flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
-  background:none;border:none;cursor:pointer;padding:4px 0;
-  color:var(--faint);font-size:10px;font-weight:600;letter-spacing:.2px;text-transform:uppercase;
+  background:none;border:none;cursor:pointer;padding:3px 0;
+  color:rgba(255,255,255,.35);font-size:10px;font-weight:600;letter-spacing:.2px;text-transform:uppercase;
   transition:color .15s;
 }
-.ni.on{color:var(--blue)}
+.ni.on{color:#7bc8ce}
+.ni-pill{
+  display:flex;align-items:center;justify-content:center;
+  width:44px;height:30px;border-radius:12px;
+  transition:background .15s;
+}
+.ni.on .ni-pill{background:rgba(35,120,130,.35)}
 .ni svg{transition:transform .15s}
-.ni.on svg{transform:scale(1.12)}
+.ni.on svg{transform:scale(1.08)}
 
 /* ═══════════════════════════════════════════════════════════
    PANEL HEADER
@@ -357,8 +364,8 @@ body{
 }
 button,input,select,textarea{font-family:var(--f)}
 .bar{
-  height:calc(var(--bar) + env(safe-area-inset-top,0px));
-  padding-top:env(safe-area-inset-top,0px);
+  height:calc(var(--bar) + env(safe-area-inset-top,0px) + 16px);
+  padding-top:calc(env(safe-area-inset-top,0px) + 16px);
   background:linear-gradient(135deg, rgba(35,80,110,.98) 0%, rgba(52,100,122,.98) 40%, rgba(35,120,130,.97) 100%);
   border-bottom:1px solid rgba(255,255,255,.16);
   box-shadow:0 10px 28px rgba(22,44,60,.20);
@@ -374,17 +381,9 @@ button,input,select,textarea{font-family:var(--f)}
 .bar-icon img{width:28px;height:28px;display:block;border-radius:8px}
 .bar-title{font-size:15px;letter-spacing:.2px}
 .bar-sub{font-size:11px;color:rgba(255,255,255,.78)}
-.bar-pill{
-  height:34px;
-  background:rgba(255,255,255,.14);
-  border:1px solid rgba(255,255,255,.16);
-  color:#f7fbff;
-  box-shadow:0 8px 22px rgba(0,0,0,.12);
-  transition:transform .18s ease, background .18s ease, box-shadow .18s ease;
-}
 .main{
   max-width:1180px;
-  padding-top:calc(var(--bar) + env(safe-area-inset-top,0px) + 20px);
+  padding-top:calc(var(--bar) + env(safe-area-inset-top,0px) + 36px);
   padding-left:max(16px, env(safe-area-inset-left));
   padding-right:max(16px, env(safe-area-inset-right));
   padding-bottom:calc(var(--nav) + var(--safe) + 26px);
@@ -467,19 +466,19 @@ button,input,select,textarea{font-family:var(--f)}
   left:50%;right:auto;bottom:10px;transform:translateX(-50%);
   width:min(1180px, calc(100vw - 18px));
   height:calc(var(--nav) + var(--safe));
-  border:1px solid rgba(95,169,178,.18);
+  border:none;
   border-radius:22px;
-  background:rgba(255,255,255,.86);
-  backdrop-filter:blur(18px);
-  box-shadow:0 18px 42px rgba(25,52,70,.14);
+  background:#193446;
+  backdrop-filter:none;
+  box-shadow:0 8px 32px rgba(15,30,50,.32);
 }
 .ni{
   gap:4px;
-  color:var(--muted);
+  color:rgba(255,255,255,.35);
   transition:transform .18s ease, color .18s ease;
 }
-.ni.on{color:var(--navy)}
-.ni.on svg{transform:translateY(-1px) scale(1.10)}
+.ni.on{color:#7bc8ce}
+.ni.on svg{transform:scale(1.08)}
 .ov{backdrop-filter:blur(5px)}
 .sheet{
   border:1px solid rgba(95,169,178,.16);
@@ -543,7 +542,7 @@ button,input,select,textarea{font-family:var(--f)}
   .bar{padding:0 14px}
   .bar-title{font-size:14px}
   .bar-sub{font-size:10px}
-  .main{padding-top:calc(var(--bar) + env(safe-area-inset-top,0px) + 16px)}
+  .main{padding-top:calc(var(--bar) + env(safe-area-inset-top,0px) + 32px)}
   .ph h2{font-size:22px}
   .f-row,.f-row3{grid-template-columns:1fr}
   .det-row{flex-direction:column;gap:3px}
@@ -726,20 +725,14 @@ body:not(.role-user) .user-only{display:none!important}
 }
 /* AppBar sombra más pronunciada */
 .bar{box-shadow:0 2px 18px rgba(24,78,120,.3),0 1px 0 rgba(255,255,255,.07) inset}
-/* Nav blur glass */
+/* Nav navy */
 .nav{
-  backdrop-filter:blur(16px) saturate(1.8);
-  -webkit-backdrop-filter:blur(16px) saturate(1.8);
-  background:rgba(255,255,255,.94);
-  box-shadow:0 -2px 20px rgba(24,78,120,.1),0 -1px 0 rgba(24,78,120,.05);
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+  background:#193446;
+  box-shadow:0 -4px 24px rgba(15,30,50,.28);
 }
-/* Indicador activo en nav */
-.ni.on{position:relative}
-.ni.on::before{
-  content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);
-  width:26px;height:3px;border-radius:0 0 5px 5px;
-  background:linear-gradient(90deg,var(--blue),var(--teal-lt));
-}
+.ni.on::before{display:none}
 /* ═══════════════════════════════════════════════════════════
    PWA INSTALL BANNER
 ═══════════════════════════════════════════════════════════ */
@@ -948,10 +941,8 @@ body:not(.role-user) .user-only{display:none!important}
     <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
     <span class="bell-dot hid" id="bellDot"></span>
   </button>
-  <button class="bar-pill" onclick="logout()" title="Cerrar sesión">
-    <span class="dot ok" id="dotConn"></span>
-    <span class="user-pill" id="lblConn">Usuario</span>
-    <span class="role-chip" id="lblRole">user</span>
+  <button class="bar-avatar" onclick="logout()" title="Cerrar sesión">
+    <span id="avatarInitials">US</span>
   </button>
   </div>
 </header>
@@ -1111,19 +1102,19 @@ body:not(.role-user) .user-only{display:none!important}
 <!-- BOTTOM NAV -->
 <nav class="nav">
   <button class="ni on" id="ni-dashboard" onclick="nav('dashboard')">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+    <div class="ni-pill"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
     Inicio
   </button>
   <button class="ni" id="ni-investigaciones" onclick="nav('investigaciones')">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+    <div class="ni-pill"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
     Registros
   </button>
   <button class="ni" id="ni-agentes" onclick="nav('agentes')">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    <div class="ni-pill"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
     Agentes
   </button>
   <button class="ni admin-only" id="ni-config" onclick="nav('config')">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.35 1.05V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1.05-.35H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6A1.65 1.65 0 0 0 10.35 3V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.3.36.56.6.8.3.3.66.48 1.05.55H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51.65z"/></svg>
+    <div class="ni-pill"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.35 1.05V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1.05-.35H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6A1.65 1.65 0 0 0 10.35 3V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.3.36.56.6.8.3.3.66.48 1.05.55H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51.65z"/></svg></div>
     Config
   </button>
 </nav>
@@ -1244,8 +1235,11 @@ function enterApp(){
   document.body.classList.remove('locked','role-admin','role-user');
   document.body.classList.add(isAdmin()?'role-admin':'role-user');
   const u=AUTH&&AUTH.user?AUTH.user:{};
-  document.getElementById('lblConn').textContent=u.nombre||u.usuario||'Usuario';
-  document.getElementById('lblRole').textContent=u.rol||'user';
+  const fullName=u.nombre||u.usuario||'Usuario';
+  const parts=fullName.trim().split(/\s+/);
+  const initials=(parts.length>=2?parts[0][0]+parts[parts.length-1][0]:fullName.slice(0,2)).toUpperCase();
+  const av=document.getElementById('avatarInitials');
+  if(av) av.textContent=initials;
   const gn=document.getElementById('greetingName');
   if(gn) gn.textContent=u.nombre||u.usuario||'Usuario';
   nav('dashboard');
