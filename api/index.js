@@ -1,25 +1,19 @@
 'use strict';
 // ════════════════════════════════════════════════════════════════════
-//  SIPROSA · Investigación de Accidentes — API Vercel + Neon
-//  Reemplaza code.gs (Google Apps Script) con idéntica interfaz de acciones.
+//  Personal DMTH — API Vercel + Neon
 // ════════════════════════════════════════════════════════════════════
 const { neon } = require('@neondatabase/serverless');
 const crypto = require('crypto');
 
-const APP_NAME = 'SIPROSA - Investigación de Accidentes';
-
 // ── DB ────────────────────────────────────────────────────────────────
 function getDb() {
-  if (!process.env.DATABASE_URL) throw new Error('Falta variable de entorno DATABASE_URL');
+  if (!process.env.DATABASE_URL) throw new Error('Falta DATABASE_URL');
   return neon(process.env.DATABASE_URL);
 }
 
-// ── UTILITIES ─────────────────────────────────────────────────────────
-function generateId(prefix) {
-  const now = new Date();
-  const p = n => String(n).padStart(2, '0');
-  const ts = `${now.getFullYear()}${p(now.getMonth()+1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`;
-  return `${prefix}-${ts}-${Math.floor(Math.random() * 10000)}`;
+// ── UTILS ─────────────────────────────────────────────────────────────
+function genId(prefix) {
+  return `${prefix}_${crypto.randomBytes(6).toString('hex')}`;
 }
 
 function normalizar(s) {
@@ -33,17 +27,13 @@ function normalizar(s) {
 
 function agenteSearchKey(o) {
   return normalizar([
-    o.id_agente, o.cuil, o.dni, o.apellido, o.nombre,
-    o.apellido_nombre, o.establecimiento, o.localidad,
-    o.sector, o.tarea_puesto
+    o.cuil, o.dni, o.apellido, o.nombre,
+    o.apellido_nombre, o.establecimiento,
+    o.localidad, o.sector, o.tarea_puesto
   ].join(' '));
 }
 
-// ── AUTH — compatible con hashes de code.gs ───────────────────────────
-function legacyHashPassword(plain) {
-  return crypto.createHash('sha256').update(String(plain || ''), 'utf8').digest('hex');
-}
-
+// ── AUTH ─────────────────────────────────────────────────────────────
 function hashPassword(plain) {
   const salt = crypto.randomUUID().replace(/-/g, '');
   let v = salt + ':' + String(plain || '');
@@ -53,615 +43,977 @@ function hashPassword(plain) {
 
 function verifyPassword(plain, stored) {
   stored = String(stored || '');
-  if (!stored.includes('$')) return stored === legacyHashPassword(plain);
-  const parts = stored.split('$');
-  if (parts.length !== 2) return false;
-  let v = parts[0] + ':' + String(plain || '');
+  if (!stored.includes('$')) {
+    return stored === crypto.createHash('sha256').update(String(plain || ''), 'utf8').digest('hex');
+  }
+  const [salt, hash] = stored.split('$');
+  let v = salt + ':' + String(plain || '');
   for (let i = 0; i < 12000; i++) v = crypto.createHash('sha256').update(v, 'utf8').digest('hex');
-  return v === parts[1];
-}
-
-function validatePassword(password) {
-  if (String(password || '').length < 12) throw new Error('La contraseña debe tener al menos 12 caracteres.');
+  return v === hash;
 }
 
 function tokenSecret() {
-  const s = process.env.SIPROSA_TOKEN_SECRET;
-  if (!s) throw new Error('Falta variable de entorno SIPROSA_TOKEN_SECRET');
+  const s = process.env.DMTH_TOKEN_SECRET;
+  if (!s) throw new Error('Falta DMTH_TOKEN_SECRET');
   return s;
-}
-
-function hmacHex(payload) {
-  return crypto.createHmac('sha256', tokenSecret()).update(payload, 'utf8').digest('hex');
 }
 
 function makeToken(user) {
   const payload = JSON.stringify({
-    u: user.usuario, n: user.nombre, r: user.rol,
-    e: user.email || '', exp: Date.now() + 1000 * 60 * 60 * 12
+    id: user.id_usuario,
+    u: user.usuario,
+    n: user.nombre,
+    r: user.rol,
+    e: user.email,
+    exp: Date.now() + 8 * 60 * 60 * 1000 // 8 horas
   });
   const b64 = Buffer.from(payload).toString('base64url');
-  return b64 + '.' + hmacHex(b64);
+  const sig = crypto.createHmac('sha256', tokenSecret()).update(b64).digest('base64url');
+  return `${b64}.${sig}`;
 }
 
-async function validateToken(token, sql) {
-  token = String(token || '');
+function verifyToken(token) {
+  if (!token) return null;
   const parts = token.split('.');
-  if (parts.length !== 2) throw new Error('Sesión vencida o inexistente. Iniciá sesión nuevamente.');
-  if (hmacHex(parts[0]) !== parts[1]) throw new Error('Sesión inválida. Iniciá sesión nuevamente.');
-  let payload;
-  try { payload = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8')); }
-  catch { throw new Error('Token malformado.'); }
-  if (!payload.exp || Date.now() > Number(payload.exp)) throw new Error('Sesión vencida. Iniciá sesión nuevamente.');
-  const rows = await sql(
-    `SELECT * FROM usuarios WHERE activo != 'NO' AND LOWER(usuario) = LOWER($1) LIMIT 1`,
-    [payload.u]
-  );
-  if (!rows.length) throw new Error('Usuario inactivo o inexistente');
-  return publicUser(rows[0]);
-}
-
-function publicUser(u) {
-  return {
-    id_usuario: u.id_usuario || '',
-    usuario: u.usuario || '',
-    nombre: u.nombre || u.usuario || '',
-    email: u.email || '',
-    rol: String(u.rol || 'user').toLowerCase(),
-    activo: u.activo || 'SI'
-  };
-}
-
-async function logAction(accion, entidad, id, detalle, usuario, sql) {
+  if (parts.length !== 2) return null;
+  const sig = crypto.createHmac('sha256', tokenSecret()).update(parts[0]).digest('base64url');
+  if (sig !== parts[1]) return null;
   try {
-    await sql(
-      `INSERT INTO logs (timestamp, usuario, accion, entidad, id_entidad, detalle) VALUES (NOW(), $1, $2, $3, $4, $5)`,
-      [usuario || '', accion, entidad, String(id || ''), String(detalle || '')]
-    );
-  } catch (_) {}
+    const data = JSON.parse(Buffer.from(parts[0], 'base64url').toString());
+    if (Date.now() > data.exp) return null;
+    return data;
+  } catch { return null; }
 }
 
-// ── USUARIOS ──────────────────────────────────────────────────────────
-async function loginUsuario(usuario, password, sql) {
-  usuario = String(usuario || '').trim().toLowerCase();
-  password = String(password || '');
-  if (!usuario || !password) throw new Error('Ingresá usuario y contraseña');
-
-  const rows = await sql(
-    `SELECT * FROM usuarios WHERE activo != 'NO' AND (LOWER(usuario) = $1 OR LOWER(email) = $1) LIMIT 1`,
-    [usuario]
-  );
-  if (!rows.length) throw new Error('Usuario o contraseña incorrectos');
-  const row = rows[0];
-
-  if (!verifyPassword(password, row.password_hash)) throw new Error('Usuario o contraseña incorrectos');
-
-  if (!String(row.password_hash || '').includes('$')) {
-    await sql(`UPDATE usuarios SET password_hash = $1 WHERE id_usuario = $2`, [hashPassword(password), row.id_usuario]);
-  }
-  await sql(`UPDATE usuarios SET ultimo_login = NOW(), fecha_actualizacion = NOW() WHERE id_usuario = $1`, [row.id_usuario]);
-
-  const user = publicUser(row);
-  const token = makeToken(user);
-  await logAction('login', 'Usuarios', row.id_usuario, user.usuario, user.usuario, sql);
-  return { ok: true, data: { token, user } };
+function getToken(req) {
+  const auth = req.headers['authorization'] || '';
+  if (auth.startsWith('Bearer ')) return auth.slice(7);
+  return null;
 }
 
-async function listarUsuarios(sql) {
-  const rows = await sql(`SELECT * FROM usuarios ORDER BY fecha_alta`);
-  return { ok: true, data: rows.map(publicUser) };
+function requireAuth(req, minRol) {
+  const data = verifyToken(getToken(req));
+  if (!data) return null;
+  const orden = ['read', 'user', 'admin', 'superadmin'];
+  if (orden.indexOf(data.r) < orden.indexOf(minRol)) return null;
+  return data;
 }
 
-async function crearUsuario(data, sql) {
-  data = data || {};
-  if (!data.usuario) throw new Error('Falta usuario');
-  validatePassword(data.password);
-  const usuario = String(data.usuario).trim().toLowerCase();
-  const email = String(data.email || '').trim().toLowerCase();
-
-  const existing = await sql(
-    `SELECT 1 FROM usuarios WHERE LOWER(usuario) = $1 OR ($2 != '' AND LOWER(email) = $2) LIMIT 1`,
-    [usuario, email]
-  );
-  if (existing.length) throw new Error('Ya existe un usuario con ese usuario o email');
-
-  const id = data.id_usuario || generateId('USR');
-  const rol = String(data.rol || 'user').toLowerCase() === 'admin' ? 'admin' : 'user';
-  await sql(
-    `INSERT INTO usuarios (id_usuario, usuario, nombre, email, password_hash, rol, activo, fecha_alta, fecha_actualizacion)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
-    [id, usuario, data.nombre || data.usuario, data.email || '', hashPassword(data.password), rol, data.activo || 'SI']
-  );
-  await logAction('crearUsuario', 'Usuarios', id, usuario, '', sql);
-  return { ok: true, data: { id_usuario: id, usuario, nombre: data.nombre || usuario, email: data.email || '', rol, activo: data.activo || 'SI' } };
+// ── LOG ─────────────────────────────────────────────────────────────
+async function log(sql, usuario, accion, entidad, id_entidad, detalle = '') {
+  await sql`INSERT INTO logs (usuario, accion, entidad, id_entidad, detalle)
+            VALUES (${usuario}, ${accion}, ${entidad}, ${id_entidad}, ${detalle})`;
 }
 
-async function editarUsuario(id_usuario, data, sql) {
-  if (!id_usuario) throw new Error('Falta id_usuario');
-  data = data || {};
-  const keys = [];
-  const vals = [];
-
-  const map = { usuario: data.usuario, nombre: data.nombre, email: data.email, activo: data.activo };
-  if (data.rol !== undefined) map.rol = String(data.rol).toLowerCase() === 'admin' ? 'admin' : 'user';
-  Object.entries(map).forEach(([k, v]) => { if (v !== undefined) { keys.push(k); vals.push(v); } });
-  if (data.password) { validatePassword(data.password); keys.push('password_hash'); vals.push(hashPassword(data.password)); }
-  if (!keys.length) return { ok: true };
-
-  const sets = keys.map((k, i) => `"${k}" = $${i + 1}`).join(', ');
-  vals.push(id_usuario);
-  await sql(`UPDATE usuarios SET ${sets}, fecha_actualizacion = NOW() WHERE id_usuario = $${vals.length}`, vals);
-  await logAction('editarUsuario', 'Usuarios', id_usuario, '', '', sql);
-  return { ok: true };
-}
-
-async function eliminarUsuario(id_usuario, sql) {
-  if (!id_usuario) throw new Error('Falta id_usuario');
-  await sql(`UPDATE usuarios SET activo = 'NO', fecha_actualizacion = NOW() WHERE id_usuario = $1`, [id_usuario]);
-  await logAction('eliminarUsuario', 'Usuarios', id_usuario, 'Baja lógica', '', sql);
-  return { ok: true };
-}
-
-// ── AGENTES ──────────────────────────────────────────────────────────
-async function buscarAgentes(query, limit, sql) {
-  query = String(query || '').trim();
-  limit = Math.min(Number(limit || 20), 50);
-  if (!query) {
-    return { ok: true, data: [], meta: { message: 'Ingresá un criterio de búsqueda.' } };
-  }
-  const tokens = normalizar(query).split(' ').filter(Boolean).slice(0, 5);
-  const conditions = tokens.map((_, i) => `search_key LIKE $${i + 1}`).join(' AND ');
-  const vals = tokens.map(t => `%${t}%`);
-  vals.push(limit);
-
-  const rows = await sql(
-    `SELECT id_agente, cuil, dni, apellido_nombre, establecimiento, sector, tarea_puesto, activo
-     FROM agentes WHERE activo != 'NO' AND (${conditions}) LIMIT $${vals.length}`,
-    vals
-  );
-  return { ok: true, data: rows, meta: { indexed: true, returned: rows.length } };
-}
-
-async function getAgente(id_agente, sql) {
-  if (!id_agente) throw new Error('Falta id_agente');
-  const rows = await sql(`SELECT * FROM agentes WHERE id_agente = $1 LIMIT 1`, [id_agente]);
-  if (!rows.length) throw new Error('Agente no encontrado: ' + id_agente);
-  return { ok: true, data: rows[0] };
-}
-
-const AGENTE_COLS = ['id_agente','cuil','dni','apellido','nombre','apellido_nombre','telefono','email',
-  'establecimiento','localidad','sector','tarea_puesto','fecha_ingreso',
-  'codigo_1','codigo_2','codigo_3','codigo_4','codigo_5',
-  'inicio_exposicion','fin_exposicion','activo','search_key','usuario_actualizacion'];
-
-async function crearAgente(data, userEmail, sql) {
-  data = data || {};
-  const obj = {
-    id_agente: data.id_agente || generateId('AGE'),
-    cuil: data.cuil || '', dni: data.dni || '',
-    apellido: data.apellido || '', nombre: data.nombre || '',
-    apellido_nombre: data.apellido_nombre || ((data.apellido || '') + ' ' + (data.nombre || '')).trim(),
-    telefono: data.telefono || '', email: data.email || '',
-    establecimiento: data.establecimiento || '', localidad: data.localidad || '',
-    sector: data.sector || '', tarea_puesto: data.tarea_puesto || '',
-    fecha_ingreso: data.fecha_ingreso || '',
-    codigo_1: data.codigo_1 || '', codigo_2: data.codigo_2 || '',
-    codigo_3: data.codigo_3 || '', codigo_4: data.codigo_4 || '', codigo_5: data.codigo_5 || '',
-    inicio_exposicion: data.inicio_exposicion || '', fin_exposicion: data.fin_exposicion || '',
-    activo: data.activo || 'SI', usuario_actualizacion: userEmail
-  };
-  obj.search_key = agenteSearchKey(obj);
-
-  const cols = AGENTE_COLS.filter(k => obj[k] !== undefined);
-  const colStr = cols.map(k => `"${k}"`).join(', ');
-  const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
-  const vals = cols.map(k => obj[k] ?? '');
-
-  await sql(
-    `INSERT INTO agentes (${colStr}, fecha_alta, fecha_actualizacion) VALUES (${placeholders}, NOW(), NOW())`,
-    vals
-  );
-  await logAction('crearAgente', 'Agentes', obj.id_agente, obj.apellido_nombre, userEmail, sql);
-  return { ok: true, data: obj };
-}
-
-async function editarAgente(id_agente, data, userEmail, sql) {
-  if (!id_agente) throw new Error('Falta id_agente');
-  const cur = await sql(`SELECT * FROM agentes WHERE id_agente = $1 LIMIT 1`, [id_agente]);
-  if (!cur.length) throw new Error('Agente no encontrado: ' + id_agente);
-
-  const patch = Object.assign({}, data);
-  delete patch.id_agente;
-  const apellido = patch.apellido !== undefined ? patch.apellido : cur[0].apellido;
-  const nombre = patch.nombre !== undefined ? patch.nombre : cur[0].nombre;
-  if (!patch.apellido_nombre) patch.apellido_nombre = ((apellido || '') + ' ' + (nombre || '')).trim();
-  patch.search_key = agenteSearchKey(Object.assign({}, cur[0], patch, { id_agente }));
-  patch.usuario_actualizacion = userEmail;
-
-  const updatable = AGENTE_COLS.filter(k => k !== 'id_agente');
-  const keys = updatable.filter(k => patch[k] !== undefined);
-  if (!keys.length) return { ok: true };
-
-  const sets = keys.map((k, i) => `"${k}" = $${i + 1}`).join(', ');
-  const vals = keys.map(k => patch[k]);
-  vals.push(id_agente);
-  await sql(`UPDATE agentes SET ${sets}, fecha_actualizacion = NOW() WHERE id_agente = $${vals.length}`, vals);
-  await logAction('editarAgente', 'Agentes', id_agente, '', userEmail, sql);
-  return { ok: true };
-}
-
-async function eliminarAgente(id_agente, motivo, userEmail, sql) {
-  if (!id_agente) throw new Error('Falta id_agente');
-  await sql(
-    `UPDATE agentes SET activo = 'NO', fecha_actualizacion = NOW(), usuario_actualizacion = $1 WHERE id_agente = $2`,
-    [userEmail, id_agente]
-  );
-  await logAction('eliminarAgente', 'Agentes', id_agente, motivo || 'Baja lógica', userEmail, sql);
-  return { ok: true };
-}
-
-async function reconstruirIndiceAgentes(sql) {
-  const agentes = await sql(`SELECT * FROM agentes`);
-  let rebuilt = 0;
-  for (const ag of agentes) {
-    const sk = agenteSearchKey(ag);
-    await sql(`UPDATE agentes SET search_key = $1 WHERE id_agente = $2`, [sk, ag.id_agente]);
-    rebuilt++;
-  }
-  await logAction('reconstruirIndiceAgentes', 'Agentes', '', rebuilt + ' agentes', '', sql);
-  return { ok: true, data: { filas: rebuilt, message: `search_key reconstruido para ${rebuilt} agentes.` } };
-}
-
-// ── INVESTIGACIONES ──────────────────────────────────────────────────
-const INV_COLS = [
-  'id_investigacion','numero_ficha','estado','usuario_carga',
-  'efector','sector_area','fecha_incidente','tipo_evento',
-  'circuito_inmediato_superior','circuito_direccion_establecimiento',
-  'circuito_salud_ocupacional','circuito_hys_siprosa','circuito_otros','circuito_otros_texto',
-  'agente_id','agente_cuil','agente_dni','agente_apellido','agente_nombre','agente_apellido_nombre',
-  'agente_telefono','agente_localidad','agente_cp','agente_provincia',
-  'antiguedad_empresa_anios','antiguedad_empresa_meses','antiguedad_puesto_anios','antiguedad_puesto_meses',
-  'nivel','edad','horario_desde','horario_hasta','tipo_contratacion',
-  'fecha_suceso','hora_suceso','numero_siniestro','tipo_lugar_suceso','medio_traslado',
-  'estaba_en_puesto','era_puesto_habitual',
-  'forma_accidente_codigo','forma_accidente_descripcion',
-  'agente_causante_codigo','agente_causante_descripcion','agente_causante_tipo',
-  'agente_material_codigo','agente_material_descripcion',
-  'naturaleza_lesion_codigo','naturaleza_lesion_descripcion',
-  'zona_cuerpo_codigo','zona_cuerpo_descripcion',
-  'inicio_ilt','inicio_ilt_observaciones','testigos','descripcion_accidente',
-  'causa_1','causa_2','causa_3','causa_4',
-  'centro_medico_primera_atencion','denuncia_policial_numero','comisaria','prestador_derivado_populart',
-  'accidente_domicilio_ocurrencia','accidente_localidad',
-  'responsable_apellido','responsable_nombre','responsable_cargo','responsable_titulo','responsable_mp','responsable_firma',
-  'recepcion_informe','dependencia','fecha_recepcion',
-  'pdf_ficha_url','doc_ficha_url','pdf_art_url','doc_art_url',
-  'motivo_anulacion','fecha_anulacion','usuario_anulacion','usuario_actualizacion'
-];
-
-async function buscarInvestigaciones(filters, sql) {
-  filters = filters || {};
-  const conditions = [];
-  const vals = [];
-
-  if (filters.estado) { vals.push(filters.estado); conditions.push(`estado = $${vals.length}`); }
-  if (filters.query) {
-    const q = '%' + String(filters.query).toLowerCase() + '%';
-    vals.push(q);
-    const p = vals.length;
-    conditions.push(`(
-      LOWER(COALESCE(numero_ficha,'')) LIKE $${p} OR
-      LOWER(COALESCE(numero_siniestro,'')) LIKE $${p} OR
-      LOWER(COALESCE(agente_cuil,'')) LIKE $${p} OR
-      LOWER(COALESCE(agente_dni,'')) LIKE $${p} OR
-      LOWER(COALESCE(agente_apellido_nombre,'')) LIKE $${p} OR
-      LOWER(COALESCE(efector,'')) LIKE $${p} OR
-      LOWER(COALESCE(sector_area,'')) LIKE $${p} OR
-      LOWER(COALESCE(descripcion_accidente,'')) LIKE $${p}
-    )`);
-  }
-
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  const limit = Math.min(Number(filters.limit || 200), 1000);
-  vals.push(limit);
-
-  const rows = await sql(
-    `SELECT * FROM investigaciones ${where} ORDER BY fecha_carga DESC LIMIT $${vals.length}`,
-    vals
-  );
-  return { ok: true, data: rows };
-}
-
-async function crearInvestigacion(data, userEmail, sql) {
-  const id = data.id_investigacion || generateId('INV');
-  const countRows = await sql(`SELECT COUNT(*) AS cnt FROM investigaciones`);
-  const n = Number(countRows[0].cnt) + 1;
-  const year = new Date().getFullYear();
-  const numero_ficha = data.numero_ficha || `INV-${year}-${String(n).padStart(5, '0')}`;
-
-  const obj = { id_investigacion: id, numero_ficha, estado: data.estado || 'BORRADOR', usuario_carga: data.usuario_carga || userEmail, usuario_actualizacion: userEmail };
-  INV_COLS.forEach(k => { if (k !== 'id_investigacion' && k !== 'numero_ficha' && k !== 'estado' && k !== 'usuario_carga' && k !== 'usuario_actualizacion' && data[k] !== undefined) obj[k] = data[k]; });
-
-  const keys = INV_COLS.filter(k => obj[k] !== undefined);
-  const colStr = keys.map(k => `"${k}"`).join(', ');
-  const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-  const vals = keys.map(k => obj[k] ?? '');
-
-  await sql(
-    `INSERT INTO investigaciones (${colStr}, fecha_carga, fecha_actualizacion) VALUES (${placeholders}, NOW(), NOW())`,
-    vals
-  );
-
-  await saveChildRows('antecedentes_at_ep', data.antecedentes_at_ep, id, sql);
-  await saveChildRows('antecedentes_patologicos', data.antecedentes_patologicos, id, sql);
-  await saveChildRows('antecedentes_laborales', data.antecedentes_laborales, id, sql);
-  await saveChildRows('medidas_correctivas', data.medidas_correctivas, id, sql);
-
-  await logAction('crearInvestigacion', 'Investigaciones', id, numero_ficha, userEmail, sql);
-  return { ok: true, data: Object.assign({ id_investigacion: id, numero_ficha }, obj) };
-}
-
-async function editarInvestigacion(id_investigacion, data, userEmail, sql) {
-  if (!id_investigacion) throw new Error('Falta id_investigacion');
-
-  const updatable = INV_COLS.filter(k => !['id_investigacion','numero_ficha','usuario_carga','fecha_carga'].includes(k));
-  const keys = updatable.filter(k => data[k] !== undefined);
-  if (!keys.length) {
-    // Still save children
-  } else {
-    keys.push('usuario_actualizacion');
-    const vals = keys.slice(0, -1).map(k => data[k]);
-    vals.push(userEmail, id_investigacion);
-    const sets = keys.slice(0, -1).map((k, i) => `"${k}" = $${i + 1}`).join(', ');
-    await sql(
-      `UPDATE investigaciones SET ${sets}, "usuario_actualizacion" = $${vals.length - 1}, fecha_actualizacion = NOW() WHERE id_investigacion = $${vals.length}`,
-      vals
-    );
-  }
-
-  await saveChildRows('antecedentes_at_ep', data.antecedentes_at_ep, id_investigacion, sql);
-  await saveChildRows('antecedentes_patologicos', data.antecedentes_patologicos, id_investigacion, sql);
-  await saveChildRows('antecedentes_laborales', data.antecedentes_laborales, id_investigacion, sql);
-  await saveChildRows('medidas_correctivas', data.medidas_correctivas, id_investigacion, sql);
-
-  await logAction('editarInvestigacion', 'Investigaciones', id_investigacion, '', userEmail, sql);
-  return { ok: true };
-}
-
-async function eliminarInvestigacion(id_investigacion, motivo, userEmail, sql) {
-  if (!id_investigacion) throw new Error('Falta id_investigacion');
-  await sql(
-    `UPDATE investigaciones SET estado = 'ANULADA', motivo_anulacion = $1, fecha_anulacion = NOW()::TEXT, usuario_anulacion = $2, fecha_actualizacion = NOW() WHERE id_investigacion = $3`,
-    [motivo || 'Anulada desde sistema', userEmail, id_investigacion]
-  );
-  await logAction('eliminarInvestigacion', 'Investigaciones', id_investigacion, motivo || '', userEmail, sql);
-  return { ok: true };
-}
-
-async function getInvestigacionCompleta(id_investigacion, sql) {
-  const rows = await sql(`SELECT * FROM investigaciones WHERE id_investigacion = $1 LIMIT 1`, [id_investigacion]);
-  if (!rows.length) throw new Error('Investigación no encontrada: ' + id_investigacion);
-  const inv = rows[0];
-  const [aep, ap, al, mc, f] = await Promise.all([
-    sql(`SELECT * FROM antecedentes_at_ep WHERE id_investigacion = $1 AND activo != 'NO'`, [id_investigacion]),
-    sql(`SELECT * FROM antecedentes_patologicos WHERE id_investigacion = $1 AND activo != 'NO'`, [id_investigacion]),
-    sql(`SELECT * FROM antecedentes_laborales WHERE id_investigacion = $1 AND activo != 'NO'`, [id_investigacion]),
-    sql(`SELECT * FROM medidas_correctivas WHERE id_investigacion = $1 AND activo != 'NO'`, [id_investigacion]),
-    sql(`SELECT * FROM firmas WHERE id_investigacion = $1 AND activo != 'NO'`, [id_investigacion])
-  ]);
-  inv.antecedentes_at_ep = aep;
-  inv.antecedentes_patologicos = ap;
-  inv.antecedentes_laborales = al;
-  inv.medidas_correctivas = mc;
-  inv.firmas = f;
-  return { ok: true, data: inv };
-}
-
-const CHILD_COLS = {
-  antecedentes_at_ep: ['id','id_investigacion','fecha','dias_caidos','observaciones','activo'],
-  antecedentes_patologicos: ['id','id_investigacion','patologia','inicio','observaciones','activo'],
-  antecedentes_laborales: ['id','id_investigacion','establecimiento','tarea','desde','hasta','observaciones','activo'],
-  medidas_correctivas: ['id','id_investigacion','numero_causa','medida_correctiva','fecha','ejecucion','verificacion','responsable','estado','activo']
-};
-
-async function saveChildRows(tableName, rows, idInv, sql) {
-  if (!rows || !Array.isArray(rows)) return;
-  await sql(`UPDATE "${tableName}" SET activo = 'NO' WHERE id_investigacion = $1 AND activo != 'NO'`, [idInv]);
-  const cols = CHILD_COLS[tableName] || [];
-  for (const r of rows) {
-    if (!r || !Object.keys(r).length) continue;
-    const obj = Object.assign({ activo: 'SI' }, r, { id: r.id || generateId('ROW'), id_investigacion: idInv });
-    const insertCols = cols.filter(k => obj[k] !== undefined);
-    const colStr = insertCols.map(k => `"${k}"`).join(', ');
-    const placeholders = insertCols.map((_, i) => `$${i + 1}`).join(', ');
-    const vals = insertCols.map(k => obj[k] ?? '');
-    await sql(`INSERT INTO "${tableName}" (${colStr}) VALUES (${placeholders}) ON CONFLICT (id) DO NOTHING`, vals);
-  }
-}
-
-// ── DASHBOARD ─────────────────────────────────────────────────────────
-async function getDashboard(filters, sql) {
-  const rows = await sql(`SELECT tipo_evento, estado FROM investigaciones`);
-  return {
-    ok: true, data: {
-      total: rows.length,
-      accidentes_trabajo: rows.filter(r => String(r.tipo_evento).toUpperCase() === 'AT').length,
-      accidentes_in_itinere: rows.filter(r => String(r.tipo_evento).toUpperCase() === 'AIT').length,
-      enfermedades_profesionales: rows.filter(r => String(r.tipo_evento).toUpperCase() === 'EP').length,
-      borradores: rows.filter(r => String(r.estado).toUpperCase() === 'BORRADOR').length,
-      anuladas: rows.filter(r => String(r.estado).toUpperCase() === 'ANULADA').length
-    }
-  };
-}
-
-// ── AVISOS ────────────────────────────────────────────────────────────
-async function getAvisos(sql) {
-  try {
-    const rows = await sql(
-      `SELECT * FROM avisos WHERE activo = 'SI' ORDER BY fecha_publicacion DESC`
-    );
-    return { ok: true, data: rows };
-  } catch (e) {
-    // Tabla no existe aún (migración pendiente) — devuelve vacío en lugar de error
-    return { ok: true, data: [] };
-  }
-}
-
-async function crearAviso(data, userEmail, sql) {
-  data = data || {};
-  if (!data.titulo) throw new Error('Falta título del aviso');
-  const tipo = ['ALERTA','CAPACITACION','INFORMACION'].includes(String(data.tipo||'').toUpperCase())
-    ? String(data.tipo).toUpperCase() : 'INFORMACION';
-  const id = data.id_aviso || generateId('AVI');
-  await sql(
-    `INSERT INTO avisos (id_aviso, tipo, titulo, cuerpo, activo, fecha_publicacion, fecha_vencimiento, usuario_carga)
-     VALUES ($1, $2, $3, $4, 'SI', NOW(), $5, $6)`,
-    [id, tipo, data.titulo, data.cuerpo || '', data.fecha_vencimiento || '', userEmail]
-  );
-  await logAction('crearAviso', 'Avisos', id, data.titulo, userEmail, sql);
-  return { ok: true, data: { id_aviso: id, tipo, titulo: data.titulo } };
-}
-
-async function editarAviso(id_aviso, data, userEmail, sql) {
-  if (!id_aviso) throw new Error('Falta id_aviso');
-  const keys = [], vals = [];
-  if (data.titulo !== undefined) { keys.push('titulo'); vals.push(data.titulo); }
-  if (data.cuerpo !== undefined) { keys.push('cuerpo'); vals.push(data.cuerpo); }
-  if (data.tipo !== undefined) { keys.push('tipo'); vals.push(data.tipo); }
-  if (data.activo !== undefined) { keys.push('activo'); vals.push(data.activo); }
-  if (data.fecha_vencimiento !== undefined) { keys.push('fecha_vencimiento'); vals.push(data.fecha_vencimiento); }
-  if (!keys.length) return { ok: true };
-  const sets = keys.map((k, i) => `"${k}" = $${i + 1}`).join(', ');
-  vals.push(id_aviso);
-  await sql(`UPDATE avisos SET ${sets} WHERE id_aviso = $${vals.length}`, vals);
-  await logAction('editarAviso', 'Avisos', id_aviso, '', userEmail, sql);
-  return { ok: true };
-}
-
-async function eliminarAviso(id_aviso, userEmail, sql) {
-  if (!id_aviso) throw new Error('Falta id_aviso');
-  await sql(`UPDATE avisos SET activo = 'NO' WHERE id_aviso = $1`, [id_aviso]);
-  await logAction('eliminarAviso', 'Avisos', id_aviso, 'Baja lógica', userEmail, sql);
-  return { ok: true };
-}
-
-// ── MAIN HANDLER ──────────────────────────────────────────────────────
-module.exports = async function handler(req, res) {
+// ── CORS ─────────────────────────────────────────────────────────────
+function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+}
+
+function ok(res, data) {
+  cors(res);
+  res.status(200).json({ ok: true, ...data });
+}
+
+function err(res, msg, status = 400) {
+  cors(res);
+  res.status(status).json({ ok: false, error: msg });
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  HANDLER PRINCIPAL
+// ════════════════════════════════════════════════════════════════════
+module.exports = async function handler(req, res) {
+  cors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  let sql;
-  try { sql = getDb(); } catch (err) {
-    return res.status(200).json({ ok: false, error: err.message });
-  }
+  const body = req.method === 'POST' ? req.body : {};
+  const query = req.query || {};
+  const action = body.action || query.action || '';
 
   try {
-    // Parseo manual del body si el Content-Type no se envió (compat. con versiones antiguas del frontend)
-    let body = req.body;
-    if (!body || typeof body !== 'object') {
-      try {
-        const raw = typeof body === 'string' ? body : await new Promise((resolve, reject) => {
-          const chunks = [];
-          req.on('data', c => chunks.push(c));
-          req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-          req.on('error', reject);
-        });
-        body = raw ? JSON.parse(raw) : {};
-      } catch { body = {}; }
+    const sql = getDb();
+
+    // ─ LOGIN ──────────────────────────────────────────────────────
+    if (action === 'login') {
+      const { email, password } = body;
+      if (!email || !password) return err(res, 'Email y contraseña requeridos');
+
+      const rows = await sql`
+        SELECT * FROM usuarios
+        WHERE (email = ${email.toLowerCase()} OR usuario = ${email.toLowerCase()})
+          AND activo = 'SI'
+        LIMIT 1
+      `;
+      if (!rows.length) return err(res, 'Credenciales incorrectas', 401);
+
+      const user = rows[0];
+      if (!verifyPassword(password, user.password_hash))
+        return err(res, 'Credenciales incorrectas', 401);
+
+      await sql`UPDATE usuarios SET ultimo_login = NOW() WHERE id_usuario = ${user.id_usuario}`;
+      await log(sql, user.usuario, 'LOGIN', 'usuarios', user.id_usuario);
+
+      return ok(res, {
+        token: makeToken(user),
+        usuario: { id: user.id_usuario, usuario: user.usuario, nombre: user.nombre, email: user.email, rol: user.rol }
+      });
     }
 
-    const params = req.query || {};
-    const action = body.action || params.action;
-    if (!action) throw new Error('Falta parámetro action');
-
-    const publicActions = ['ping', 'login'];
-    let authUser = null;
-    if (!publicActions.includes(action)) {
-      authUser = await validateToken(body.token || params.token || '', sql);
+    // ─ VERIFY TOKEN ───────────────────────────────────────────────
+    if (action === 'verifyToken') {
+      const data = verifyToken(getToken(req));
+      if (!data) return err(res, 'Token inválido', 401);
+      return ok(res, { usuario: { id: data.id, usuario: data.u, nombre: data.n, email: data.e, rol: data.r } });
     }
 
-    const adminActions = ['listarUsuarios','crearUsuario','editarUsuario','eliminarUsuario',
-      'crearAgente','editarAgente','eliminarAgente','eliminarInvestigacion',
-      'estadoIndiceAgentes','reconstruirIndiceAgentes',
-      'crearAviso','editarAviso','eliminarAviso'];
-    if (adminActions.includes(action) && (!authUser || authUser.rol !== 'admin')) {
-      throw new Error('No autorizado: esta acción requiere usuario admin');
+    // ─ STATS DASHBOARD ────────────────────────────────────────────
+    if (action === 'getStats') {
+      const auth = requireAuth(req, 'read');
+      if (!auth) return err(res, 'No autorizado', 401);
+
+      const [ag, os, ot] = await Promise.all([
+        sql`SELECT
+          COUNT(*) FILTER (WHERE activo='SI') as activos,
+          COUNT(*) FILTER (WHERE activo='NO') as bajas,
+          COUNT(DISTINCT establecimiento) FILTER (WHERE activo='SI') as establecimientos,
+          COUNT(DISTINCT sector) FILTER (WHERE activo='SI') as sectores
+        FROM agentes`,
+        sql`SELECT COUNT(*) as total FROM ordenes_salida WHERE activo='SI'`,
+        sql`SELECT COUNT(*) as total FROM ordenes_trabajo WHERE activo='SI'`
+      ]);
+
+      return ok(res, { stats: { agentes: ag[0], ordenes_salida: os[0], ordenes_trabajo: ot[0] } });
     }
 
-    const userEmail = authUser ? (authUser.email || authUser.usuario || '') : '';
-    let result;
+    // ─ BUSCAR AGENTES ─────────────────────────────────────────────
+    if (action === 'buscarAgentes') {
+      const auth = requireAuth(req, 'read');
+      if (!auth) return err(res, 'No autorizado', 401);
 
-    switch (action) {
-      case 'ping':
-        result = { ok: true, app: APP_NAME, now: new Date().toISOString() };
-        break;
-      case 'login':
-        result = await loginUsuario(body.usuario || body.email || params.usuario, body.password || params.password, sql);
-        break;
-      case 'me':
-        result = { ok: true, data: { user: authUser } };
-        break;
+      const q = normalizar(body.q || query.q || '');
+      const filtro_activo = body.activo ?? 'SI';
+      const filtro_establecimiento = body.establecimiento || '';
+      const filtro_sector = body.sector || '';
+      const limit = Math.min(parseInt(body.limit || query.limit || 50), 200);
+      const offset = parseInt(body.offset || query.offset || 0);
 
-      // Usuarios
-      case 'listarUsuarios':   result = await listarUsuarios(sql); break;
-      case 'crearUsuario':     result = await crearUsuario(body.data || body, sql); break;
-      case 'editarUsuario':    result = await editarUsuario(body.id_usuario, body.data || body, sql); break;
-      case 'eliminarUsuario':  result = await eliminarUsuario(body.id_usuario, sql); break;
-
-      // Agentes
-      case 'buscarAgentes':    result = await buscarAgentes(body.query || params.query || '', Number(body.limit || params.limit || 20), sql); break;
-      case 'getAgente':        result = await getAgente(body.id_agente || params.id_agente, sql); break;
-      case 'crearAgente':      result = await crearAgente(body.data || body, userEmail, sql); break;
-      case 'editarAgente':     result = await editarAgente(body.id_agente, body.data || body, userEmail, sql); break;
-      case 'eliminarAgente':   result = await eliminarAgente(body.id_agente, body.motivo || '', userEmail, sql); break;
-      case 'estadoIndiceAgentes':
-        const ca = await sql(`SELECT COUNT(*) AS cnt FROM agentes WHERE activo != 'NO'`);
-        result = { ok: true, data: { agentes_filas: Number(ca[0].cnt), indice_filas: Number(ca[0].cnt), actualizado: true, mensaje: 'Índice gestionado automáticamente por PostgreSQL (columna search_key).' } };
-        break;
-      case 'reconstruirIndiceAgentes': result = await reconstruirIndiceAgentes(sql); break;
-
-      // Investigaciones
-      case 'buscarInvestigaciones':   result = await buscarInvestigaciones(body.filters || {}, sql); break;
-      case 'getInvestigacion':         result = await getInvestigacionCompleta(body.id_investigacion || params.id_investigacion, sql); break;
-      case 'crearInvestigacion':       result = await crearInvestigacion(body.data || body, userEmail, sql); break;
-      case 'editarInvestigacion':      result = await editarInvestigacion(body.id_investigacion, body.data || body, userEmail, sql); break;
-      case 'eliminarInvestigacion':    result = await eliminarInvestigacion(body.id_investigacion, body.motivo || '', userEmail, sql); break;
-
-      // Dashboard
-      case 'getDashboard':  result = await getDashboard(body.filters || {}, sql); break;
-
-      // Avisos
-      case 'getAvisos':      result = await getAvisos(sql); break;
-      case 'crearAviso':     result = await crearAviso(body.data || body, userEmail, sql); break;
-      case 'editarAviso':    result = await editarAviso(body.id_aviso, body.data || body, userEmail, sql); break;
-      case 'eliminarAviso':  result = await eliminarAviso(body.id_aviso, userEmail, sql); break;
-
-      // Config
-      case 'getConfig': {
-        const cfgRows = await sql(`SELECT clave, valor, descripcion FROM config WHERE clave != 'api_secret'`);
-        const cfg = {};
-        cfgRows.forEach(r => { cfg[r.clave] = r.valor; });
-        result = { ok: true, config: cfg };
-        break;
+      let rows;
+      if (q) {
+        rows = await sql`
+          SELECT id_agente, cuil, dni, apellido, nombre, apellido_nombre,
+                 establecimiento, sector, tarea_puesto, fecha_ingreso, activo
+          FROM agentes
+          WHERE (search_key ILIKE ${'%' + q + '%'})
+            AND (${filtro_activo} = '' OR activo = ${filtro_activo})
+            AND (${filtro_establecimiento} = '' OR establecimiento = ${filtro_establecimiento})
+            AND (${filtro_sector} = '' OR sector = ${filtro_sector})
+          ORDER BY apellido_nombre
+          LIMIT ${limit} OFFSET ${offset}
+        `;
+      } else {
+        rows = await sql`
+          SELECT id_agente, cuil, dni, apellido, nombre, apellido_nombre,
+                 establecimiento, sector, tarea_puesto, fecha_ingreso, activo
+          FROM agentes
+          WHERE (${filtro_activo} = '' OR activo = ${filtro_activo})
+            AND (${filtro_establecimiento} = '' OR establecimiento = ${filtro_establecimiento})
+            AND (${filtro_sector} = '' OR sector = ${filtro_sector})
+          ORDER BY apellido_nombre
+          LIMIT ${limit} OFFSET ${offset}
+        `;
       }
-      case 'setupSistema':
-        result = { ok: true, message: 'Sistema Neon/Vercel activo. Ejecutá migrations/001_schema.sql en Neon para inicializar.' };
-        break;
 
-      // PDF — no implementado aún (requiere reemplazar Google Docs)
-      case 'generarPdfFichaInterna':
-      case 'generarPdfART':
-        result = { ok: false, error: 'Generación de PDF no disponible aún en esta versión Vercel+Neon. Próximamente.' };
-        break;
-
-      default:
-        throw new Error('Acción no reconocida: ' + action);
+      return ok(res, { agentes: rows, count: rows.length });
     }
 
-    return res.status(200).json(result);
-  } catch (err) {
-    return res.status(200).json({ ok: false, error: String(err && err.message ? err.message : err) });
+    // ─ GET AGENTE ─────────────────────────────────────────────────
+    if (action === 'getAgente') {
+      const auth = requireAuth(req, 'read');
+      if (!auth) return err(res, 'No autorizado', 401);
+
+      const { id_agente } = body.id_agente ? body : query;
+      if (!id_agente) return err(res, 'Falta id_agente');
+
+      const [agente, historial] = await Promise.all([
+        sql`SELECT * FROM agentes WHERE id_agente = ${id_agente} LIMIT 1`,
+        sql`SELECT * FROM historial_agente WHERE id_agente = ${id_agente} ORDER BY fecha DESC LIMIT 100`
+      ]);
+
+      if (!agente.length) return err(res, 'Agente no encontrado', 404);
+      return ok(res, { agente: agente[0], historial });
+    }
+
+    // ─ CREAR AGENTE ───────────────────────────────────────────────
+    if (action === 'crearAgente') {
+      const auth = requireAuth(req, 'admin');
+      if (!auth) return err(res, 'No autorizado', 401);
+
+      const { cuil, dni, apellido, nombre } = body;
+      if (!cuil || !dni || !apellido || !nombre)
+        return err(res, 'Campos requeridos: cuil, dni, apellido, nombre');
+
+      const id_agente = genId('ag');
+      const apellido_nombre = `${apellido} ${nombre}`.toUpperCase();
+      const search_key = agenteSearchKey({ ...body, id_agente, apellido_nombre });
+
+      await sql`
+        INSERT INTO agentes
+          (id_agente, cuil, dni, apellido, nombre, apellido_nombre,
+           telefono, email, fecha_nacimiento, foto_url,
+           establecimiento, localidad, sector, tarea_puesto,
+           categoria, nivel_educativo, tipo_contratacion,
+           fecha_ingreso, codigo_1, codigo_2, codigo_3, codigo_4, codigo_5,
+           activo, observaciones, search_key, usuario_actualizacion)
+        VALUES
+          (${id_agente}, ${cuil}, ${dni},
+           ${apellido.toUpperCase()}, ${nombre.toUpperCase()}, ${apellido_nombre},
+           ${body.telefono||''}, ${body.email||''}, ${body.fecha_nacimiento||''},
+           ${body.foto_url||''}, ${body.establecimiento||''}, ${body.localidad||''},
+           ${body.sector||''}, ${body.tarea_puesto||''}, ${body.categoria||''},
+           ${body.nivel_educativo||''}, ${body.tipo_contratacion||''},
+           ${body.fecha_ingreso||''},
+           ${body.codigo_1||''}, ${body.codigo_2||''}, ${body.codigo_3||''},
+           ${body.codigo_4||''}, ${body.codigo_5||''},
+           'SI', ${body.observaciones||''}, ${search_key}, ${auth.u})
+      `;
+
+      await sql`
+        INSERT INTO historial_agente (id, id_agente, tipo_cambio, observaciones, usuario)
+        VALUES (${genId('h')}, ${id_agente}, 'ALTA', 'Alta del agente', ${auth.u})
+      `;
+
+      await log(sql, auth.u, 'CREAR_AGENTE', 'agentes', id_agente, apellido_nombre);
+      return ok(res, { id_agente, mensaje: 'Agente creado correctamente' });
+    }
+
+    // ─ ACTUALIZAR AGENTE ──────────────────────────────────────────
+    if (action === 'updateAgente') {
+      const auth = requireAuth(req, 'admin');
+      if (!auth) return err(res, 'No autorizado', 401);
+
+      const { id_agente } = body;
+      if (!id_agente) return err(res, 'Falta id_agente');
+
+      const prev = await sql`SELECT * FROM agentes WHERE id_agente = ${id_agente} LIMIT 1`;
+      if (!prev.length) return err(res, 'Agente no encontrado', 404);
+
+      const old = prev[0];
+      const campos = [
+        'cuil','dni','apellido','nombre','telefono','email','fecha_nacimiento','foto_url',
+        'establecimiento','localidad','sector','tarea_puesto','categoria',
+        'nivel_educativo','tipo_contratacion','fecha_ingreso','fecha_baja','motivo_baja',
+        'codigo_1','codigo_2','codigo_3','codigo_4','codigo_5','activo','observaciones'
+      ];
+
+      const cambios = [];
+      for (const c of campos) {
+        if (body[c] !== undefined && String(body[c]) !== String(old[c] ?? '')) {
+          cambios.push({ campo: c, anterior: old[c] ?? '', nuevo: body[c] });
+        }
+      }
+
+      if (!cambios.length) return ok(res, { mensaje: 'Sin cambios' });
+
+      const upd = {};
+      for (const c of cambios) upd[c.campo] = c.nuevo;
+
+      const apellido_n = (upd.apellido || old.apellido).toUpperCase();
+      const nombre_n = (upd.nombre || old.nombre).toUpperCase();
+      const apellido_nombre = `${apellido_n} ${nombre_n}`;
+      const search_key = agenteSearchKey({ ...old, ...upd, apellido_nombre });
+
+      await sql`
+        UPDATE agentes SET
+          cuil = ${upd.cuil ?? old.cuil},
+          dni = ${upd.dni ?? old.dni},
+          apellido = ${apellido_n},
+          nombre = ${nombre_n},
+          apellido_nombre = ${apellido_nombre},
+          telefono = ${upd.telefono ?? old.telefono},
+          email = ${upd.email ?? old.email},
+          fecha_nacimiento = ${upd.fecha_nacimiento ?? old.fecha_nacimiento},
+          foto_url = ${upd.foto_url ?? old.foto_url},
+          establecimiento = ${upd.establecimiento ?? old.establecimiento},
+          localidad = ${upd.localidad ?? old.localidad},
+          sector = ${upd.sector ?? old.sector},
+          tarea_puesto = ${upd.tarea_puesto ?? old.tarea_puesto},
+          categoria = ${upd.categoria ?? old.categoria},
+          nivel_educativo = ${upd.nivel_educativo ?? old.nivel_educativo},
+          tipo_contratacion = ${upd.tipo_contratacion ?? old.tipo_contratacion},
+          fecha_ingreso = ${upd.fecha_ingreso ?? old.fecha_ingreso},
+          fecha_baja = ${upd.fecha_baja ?? old.fecha_baja},
+          motivo_baja = ${upd.motivo_baja ?? old.motivo_baja},
+          codigo_1 = ${upd.codigo_1 ?? old.codigo_1},
+          codigo_2 = ${upd.codigo_2 ?? old.codigo_2},
+          codigo_3 = ${upd.codigo_3 ?? old.codigo_3},
+          codigo_4 = ${upd.codigo_4 ?? old.codigo_4},
+          codigo_5 = ${upd.codigo_5 ?? old.codigo_5},
+          activo = ${upd.activo ?? old.activo},
+          observaciones = ${upd.observaciones ?? old.observaciones},
+          search_key = ${search_key},
+          fecha_actualizacion = NOW(),
+          usuario_actualizacion = ${auth.u}
+        WHERE id_agente = ${id_agente}
+      `;
+
+      // Detectar tipo de cambio principal para el historial
+      let tipo = 'MODIFICACION';
+      if (cambios.find(c => c.campo === 'activo' && c.nuevo === 'NO')) tipo = 'BAJA';
+      if (cambios.find(c => c.campo === 'activo' && c.nuevo === 'SI' && c.anterior === 'NO')) tipo = 'REINGRESO';
+      if (cambios.find(c => c.campo === 'establecimiento')) tipo = 'CAMBIO_ESTABLECIMIENTO';
+
+      for (const c of cambios) {
+        await sql`
+          INSERT INTO historial_agente (id, id_agente, tipo_cambio, campo_modificado, valor_anterior, valor_nuevo, usuario)
+          VALUES (${genId('h')}, ${id_agente}, ${tipo}, ${c.campo}, ${c.anterior}, ${String(c.nuevo)}, ${auth.u})
+        `;
+      }
+
+      await log(sql, auth.u, 'UPDATE_AGENTE', 'agentes', id_agente, JSON.stringify(cambios.map(c => c.campo)));
+      return ok(res, { mensaje: 'Agente actualizado', cambios: cambios.length });
+    }
+
+    // ─ LISTAS MAESTRAS ────────────────────────────────────────────
+    if (action === 'getListasMaestras') {
+      const auth = requireAuth(req, 'read');
+      if (!auth) return err(res, 'No autorizado', 401);
+
+      const [establecimientos, sectores] = await Promise.all([
+        sql`SELECT DISTINCT establecimiento FROM agentes WHERE establecimiento != '' ORDER BY establecimiento`,
+        sql`SELECT DISTINCT sector FROM agentes WHERE sector != '' ORDER BY sector`
+      ]);
+
+      return ok(res, {
+        establecimientos: establecimientos.map(r => r.establecimiento),
+        sectores: sectores.map(r => r.sector)
+      });
+    }
+
+    // ─ ORDENES DE SALIDA ──────────────────────────────────────────
+    if (action === 'getOrdenesSalida') {
+      const auth = requireAuth(req, 'read');
+      if (!auth) return err(res, 'No autorizado', 401);
+
+      const desde = body.desde || query.desde || '';
+      const hasta = body.hasta || query.hasta || '';
+      const q = normalizar(body.q || query.q || '');
+      const limit = Math.min(parseInt(body.limit || query.limit || 100), 500);
+      const offset = parseInt(body.offset || query.offset || 0);
+
+      const rows = await sql`
+        SELECT * FROM ordenes_salida
+        WHERE activo = 'SI'
+          AND (${desde} = '' OR fecha >= ${desde})
+          AND (${hasta} = '' OR fecha <= ${hasta})
+          AND (${q} = '' OR LOWER(apellido_nombre) LIKE ${'%' + q + '%'} OR dni LIKE ${'%' + q + '%'})
+        ORDER BY fecha DESC, hora_salida DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+
+      const total = await sql`SELECT COUNT(*) as n FROM ordenes_salida WHERE activo = 'SI'
+        AND (${desde} = '' OR fecha >= ${desde})
+        AND (${hasta} = '' OR fecha <= ${hasta})`;
+
+      return ok(res, { ordenes: rows, total: parseInt(total[0].n) });
+    }
+
+    // ─ CREAR ORDEN DE SALIDA (interna, requiere auth) ─────────────
+    if (action === 'crearOrdenSalida') {
+      const auth = requireAuth(req, 'user');
+      if (!auth) return err(res, 'No autorizado', 401);
+
+      const { dni, apellido_nombre, sector, motivo, destino, hora_salida, hora_retorno, observaciones, vehiculo } = body;
+      if (!dni || !apellido_nombre || !sector || !motivo || !hora_salida)
+        return err(res, 'Faltan campos requeridos');
+
+      const id = genId('os');
+      const numero = 'OS-' + Date.now().toString(36).toUpperCase();
+      const fecha = new Date().toISOString().slice(0, 10);
+      const tipo = motivo.startsWith('PARTICULAR') ? 'PARTICULAR' : 'OFICIAL';
+
+      await sql`
+        INSERT INTO ordenes_salida
+          (id, numero_orden, fecha, hora_salida, hora_retorno, dni, apellido_nombre,
+           sector, destino, motivo, vehiculo, tipo, autorizado_por, observaciones, activo, usuario_carga)
+        VALUES
+          (${id}, ${numero}, ${fecha}, ${hora_salida}, ${hora_retorno||''}, ${dni}, ${apellido_nombre},
+           ${sector}, ${destino||''}, ${motivo}, ${vehiculo||''}, ${tipo}, ${auth.u}, ${observaciones||''}, 'SI', ${auth.u})
+      `;
+      await log(sql, auth.u, 'CREAR_OS', 'ordenes_salida', id, `${apellido_nombre} – ${motivo}`);
+      return ok(res, { id, numero_orden: numero, mensaje: 'Orden creada' });
+    }
+
+    // ─ EDITAR ORDEN DE SALIDA (interna, requiere auth user) ──────
+    if (action === 'editarOrdenAdmin') {
+      const auth = requireAuth(req, 'user');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const { id, motivo, destino, hora_salida, hora_retorno, observaciones } = body;
+      if (!id || !motivo || !hora_salida) return err(res, 'Faltan campos requeridos');
+      const check = await sql`SELECT id, apellido_nombre FROM ordenes_salida WHERE id=${id} AND activo='SI'`;
+      if (!check.length) return err(res, 'Orden no encontrada', 404);
+      const tipo = motivo.startsWith('PARTICULAR') ? 'PARTICULAR' : 'OFICIAL';
+      await sql`UPDATE ordenes_salida SET motivo=${motivo}, destino=${destino||''}, hora_salida=${hora_salida}, hora_retorno=${hora_retorno||''}, tipo=${tipo}, observaciones=${observaciones||''} WHERE id=${id}`;
+      await log(sql, auth.u, 'EDITAR_OS', 'ordenes_salida', id, check[0].apellido_nombre);
+      return ok(res, { ok: true });
+    }
+
+    // ─ BORRAR ORDEN DE SALIDA (interna, requiere auth admin) ────────
+    if (action === 'borrarOrdenAdmin') {
+      const auth = requireAuth(req, 'admin');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const { id } = body;
+      if (!id) return err(res, 'Falta id');
+      const check = await sql`SELECT id, apellido_nombre FROM ordenes_salida WHERE id=${id} AND activo='SI'`;
+      if (!check.length) return err(res, 'Orden no encontrada', 404);
+      await sql`UPDATE ordenes_salida SET activo='NO' WHERE id=${id}`;
+      await log(sql, auth.u, 'BORRAR_OS', 'ordenes_salida', id, check[0].apellido_nombre);
+      return ok(res, { ok: true });
+    }
+
+    // ─ BUSCAR AGENTE POR DNI (público, para salida.html) ─────────
+    if (action === 'buscarAgentePorDNI') {
+      const dni = String(body.dni || query.dni || '').replace(/\D/g, '').trim();
+      if (!dni || dni.length < 7) return err(res, 'DNI inválido');
+      const rows = await sql`
+        SELECT dni, apellido_nombre, establecimiento, sector
+        FROM agentes
+        WHERE dni = ${dni} AND activo = 'SI'
+        LIMIT 1
+      `;
+      if (!rows.length) return ok(res, { encontrado: false });
+      return ok(res, { encontrado: true, agente: rows[0] });
+    }
+
+    // ─ CREAR ORDEN DE SALIDA (pública, sin auth) ──────────────────
+    if (action === 'crearOrdenSalidaPublica') {
+      const { dni, apellido_nombre, sector, motivo, destino, hora_salida, hora_retorno, observaciones } = body;
+      if (!dni || !apellido_nombre || !sector || !motivo || !hora_salida)
+        return err(res, 'Faltan campos requeridos');
+
+      // Limitar: max 5 envíos por DNI por día (anti-spam básico)
+      const hoy = new Date().toISOString().slice(0, 10);
+      const prev = await sql`SELECT COUNT(*) as n FROM ordenes_salida WHERE dni=${dni} AND fecha=${hoy}`;
+      if (parseInt(prev[0].n) >= 5) return err(res, 'Límite de envíos diarios alcanzado para este DNI', 429);
+
+      const id = genId('os');
+      const numero = 'OS-' + Date.now().toString(36).toUpperCase();
+      const tipo = motivo.startsWith('PARTICULAR') ? 'PARTICULAR' : 'OFICIAL';
+
+      await sql`
+        INSERT INTO ordenes_salida
+          (id, numero_orden, fecha, hora_salida, hora_retorno, dni, apellido_nombre,
+           sector, destino, motivo, vehiculo, tipo, autorizado_por, observaciones, activo, usuario_carga)
+        VALUES
+          (${id}, ${numero}, ${hoy}, ${hora_salida}, ${hora_retorno||''}, ${dni}, ${apellido_nombre},
+           ${sector}, ${destino||''}, ${motivo}, '', ${tipo}, 'web_publica', ${observaciones||''}, 'SI', 'web_publica')
+      `;
+      return ok(res, { id, numero_orden: numero, mensaje: 'Solicitud enviada. Presentate al inspector para la firma.' });
+    }
+
+    // ─ CREAR CUADRILLA (múltiples agentes, sin auth) ───────────────
+    if (action === 'crearCuadrillaPublica') {
+      const { agentes, motivo, destino, hora_salida, hora_retorno, observaciones } = body;
+      if (!Array.isArray(agentes) || agentes.length === 0) return err(res, 'Falta lista de agentes');
+      if (!motivo || !hora_salida) return err(res, 'Faltan campos requeridos');
+      if (agentes.length > 30) return err(res, 'Máximo 30 agentes por cuadrilla');
+
+      const hoy = new Date().toISOString().slice(0, 10);
+      const tipo = motivo.startsWith('PARTICULAR') ? 'PARTICULAR' : 'OFICIAL';
+      const resultados = [];
+
+      for (const ag of agentes) {
+        const { dni, apellido_nombre, sector } = ag;
+        if (!dni || !apellido_nombre || !sector) continue;
+        const id = genId('os');
+        const numero = 'OS-' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2,4).toUpperCase();
+        await sql`
+          INSERT INTO ordenes_salida
+            (id, numero_orden, fecha, hora_salida, hora_retorno, dni, apellido_nombre,
+             sector, destino, motivo, vehiculo, tipo, autorizado_por, observaciones, activo, usuario_carga)
+          VALUES
+            (${id}, ${numero}, ${hoy}, ${hora_salida}, ${hora_retorno||''}, ${dni}, ${apellido_nombre},
+             ${sector}, ${destino||''}, ${motivo}, '', ${tipo}, 'web_publica', ${observaciones||''}, 'SI', 'web_publica')
+        `;
+        resultados.push({ dni, apellido_nombre, numero_orden: numero });
+      }
+      return ok(res, { resultados, total: resultados.length });
+    }
+
+    // ─ ÓRDENES POR DNI (público, solo lectura) ────────────────────
+    if (action === 'getOrdenesPorDNI') {
+      const dni = String(body.dni || query.dni || '').replace(/\D/g, '').trim();
+      if (!dni || dni.length < 7) return err(res, 'DNI inválido');
+      const rows = await sql`
+        SELECT id, numero_orden, fecha, hora_salida, hora_retorno, motivo, destino, sector, apellido_nombre, tipo, observaciones
+        FROM ordenes_salida
+        WHERE dni = ${dni} AND activo = 'SI'
+        ORDER BY fecha_carga DESC
+        LIMIT 20
+      `;
+      return ok(res, { ordenes: rows });
+    }
+
+    // ─ EDITAR ORDEN PÚBLICA (solo si el DNI del cuerpo coincide) ──
+    if (action === 'editarOrdenPublica') {
+      const { id, dni, motivo, destino, hora_salida, hora_retorno, observaciones } = body;
+      if (!id || !dni) return err(res, 'Faltan campos');
+      if (!motivo || !hora_salida) return err(res, 'Faltan campos requeridos');
+      // Verificar que la orden pertenece al DNI declarado
+      const check = await sql`SELECT id FROM ordenes_salida WHERE id=${id} AND dni=${dni} AND activo='SI'`;
+      if (!check.length) return err(res, 'Orden no encontrada o DNI incorrecto', 403);
+      const tipo = motivo.startsWith('PARTICULAR') ? 'PARTICULAR' : 'OFICIAL';
+      await sql`
+        UPDATE ordenes_salida
+        SET motivo=${motivo}, destino=${destino||''}, hora_salida=${hora_salida},
+            hora_retorno=${hora_retorno||''}, tipo=${tipo}, observaciones=${observaciones||''}
+        WHERE id=${id}
+      `;
+      return ok(res, { ok: true });
+    }
+
+    // ─ DOC TIPOS ─────────────────────────────────────────────────
+    if (action === 'getDocTipos') {
+      const auth = requireAuth(req, 'read');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const rows = await sql`SELECT * FROM doc_tipos WHERE activo='SI' ORDER BY orden, nombre`;
+      return ok(res, { tipos: rows });
+    }
+
+    if (action === 'addDocTipo') {
+      const auth = requireAuth(req, 'admin');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const { nombre } = body;
+      if (!nombre) return err(res, 'Falta nombre');
+      const id = genId('dt');
+      await sql`INSERT INTO doc_tipos (id, nombre, orden) VALUES (${id}, ${nombre.trim()}, 99)`;
+      await log(sql, auth.u, 'ADD_DOC_TIPO', 'doc_tipos', id, nombre);
+      return ok(res, { id, nombre });
+    }
+
+    if (action === 'deleteDocTipo') {
+      const auth = requireAuth(req, 'admin');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const { id } = body;
+      if (!id) return err(res, 'Falta id');
+      await sql`UPDATE doc_tipos SET activo='NO' WHERE id=${id}`;
+      return ok(res, { ok: true });
+    }
+
+    if (action === 'getDocsAgente') {
+      const auth = requireAuth(req, 'read');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const agente_id = body.agente_id || query.agente_id;
+      if (!agente_id) return err(res, 'Falta agente_id');
+      const docs = await sql`
+        SELECT ad.*, dt.nombre as tipo_nombre
+        FROM agente_documentos ad
+        JOIN doc_tipos dt ON dt.id = ad.tipo_id
+        WHERE ad.agente_id = ${agente_id} AND ad.activo = 'SI'
+        ORDER BY dt.orden, dt.nombre`;
+      const tipos = await sql`SELECT * FROM doc_tipos WHERE activo='SI' ORDER BY orden, nombre`;
+      return ok(res, { docs, tipos });
+    }
+
+    if (action === 'upsertDocAgente') {
+      const auth = requireAuth(req, 'user');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const { agente_id, tipo_id, estado, fecha_vto, observaciones } = body;
+      if (!agente_id || !tipo_id) return err(res, 'Faltan campos');
+      const existing = await sql`SELECT id FROM agente_documentos WHERE agente_id=${agente_id} AND tipo_id=${tipo_id} AND activo='SI'`;
+      if (existing.length) {
+        await sql`UPDATE agente_documentos SET estado=${estado||'pendiente'}, fecha_vto=${fecha_vto||''}, observaciones=${observaciones||''}, fecha_carga=NOW(), usuario_carga=${auth.u} WHERE id=${existing[0].id}`;
+        await log(sql, auth.u, 'UPDATE_DOC', 'agente_documentos', existing[0].id, tipo_id);
+        return ok(res, { id: existing[0].id });
+      } else {
+        const id = genId('adoc');
+        await sql`INSERT INTO agente_documentos (id, agente_id, tipo_id, estado, fecha_vto, observaciones, usuario_carga) VALUES (${id}, ${agente_id}, ${tipo_id}, ${estado||'pendiente'}, ${fecha_vto||''}, ${observaciones||''}, ${auth.u})`;
+        await log(sql, auth.u, 'ADD_DOC', 'agente_documentos', id, tipo_id);
+        return ok(res, { id });
+      }
+    }
+
+    // ─ ORDENES DE TRABAJO ─────────────────────────────────────────
+    if (action === 'getOrdenesTrabajo') {
+      const auth = requireAuth(req, 'read');
+      if (!auth) return err(res, 'No autorizado', 401);
+
+      const desde = body.desde || query.desde || '';
+      const hasta = body.hasta || query.hasta || '';
+      const q = normalizar(body.q || query.q || '');
+      const limit = Math.min(parseInt(body.limit || query.limit || 100), 500);
+      const offset = parseInt(body.offset || query.offset || 0);
+
+      const rows = await sql`
+        SELECT * FROM ordenes_trabajo
+        WHERE activo = 'SI'
+          AND (${desde} = '' OR fecha >= ${desde})
+          AND (${hasta} = '' OR fecha <= ${hasta})
+          AND (${q} = '' OR LOWER(apellido_nombre) LIKE ${'%' + q + '%'} OR dni LIKE ${'%' + q + '%'})
+        ORDER BY fecha DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+
+      const total = await sql`SELECT COUNT(*) as n FROM ordenes_trabajo WHERE activo = 'SI'
+        AND (${desde} = '' OR fecha >= ${desde})
+        AND (${hasta} = '' OR fecha <= ${hasta})`;
+
+      return ok(res, { ordenes: rows, total: parseInt(total[0].n) });
+    }
+
+    // ─ CUMPLEAÑOS ─────────────────────────────────────────────────
+    if (action === 'getCumpleanos') {
+      const auth = requireAuth(req, 'read');
+      if (!auth) return err(res, 'No autorizado', 401);
+
+      const hoy = body.fecha || query.fecha || new Date().toISOString().slice(5, 10); // MM-DD
+      const rows = await sql`
+        SELECT id_agente, apellido_nombre, fecha_nacimiento, establecimiento, sector, foto_url
+        FROM agentes
+        WHERE activo = 'SI'
+          AND fecha_nacimiento != ''
+          AND SUBSTRING(fecha_nacimiento FROM 4 FOR 5) = ${hoy}
+        ORDER BY apellido_nombre
+      `;
+
+      return ok(res, { cumpleanos: rows });
+    }
+
+    // ─ GESTIÓN DE USUARIOS (SUPERADMIN) ──────────────────────────
+    if (action === 'getUsuarios') {
+      const auth = requireAuth(req, 'superadmin');
+      if (!auth) return err(res, 'No autorizado', 401);
+
+      const rows = await sql`
+        SELECT id_usuario, usuario, nombre, email, rol, activo, ultimo_login, fecha_alta
+        FROM usuarios ORDER BY nombre
+      `;
+      return ok(res, { usuarios: rows });
+    }
+
+    if (action === 'crearUsuario') {
+      const auth = requireAuth(req, 'superadmin');
+      if (!auth) return err(res, 'No autorizado', 401);
+
+      const { email, nombre, usuario, password, rol } = body;
+      if (!email || !nombre || !usuario || !password || !rol)
+        return err(res, 'Faltan campos');
+      if (password.length < 12) return err(res, 'Contraseña mínimo 12 caracteres');
+      if (!['superadmin','admin','user','read'].includes(rol))
+        return err(res, 'Rol inválido');
+
+      const id = genId('usr');
+      await sql`
+        INSERT INTO usuarios (id_usuario, usuario, nombre, email, password_hash, rol, activo)
+        VALUES (${id}, ${usuario.toLowerCase()}, ${nombre}, ${email.toLowerCase()}, ${hashPassword(password)}, ${rol}, 'SI')
+      `;
+      await log(sql, auth.u, 'CREAR_USUARIO', 'usuarios', id, email);
+      return ok(res, { id_usuario: id, mensaje: 'Usuario creado' });
+    }
+
+    if (action === 'updateUsuario') {
+      const auth = requireAuth(req, 'superadmin');
+      if (!auth) return err(res, 'No autorizado', 401);
+
+      const { id_usuario, nombre, rol, activo, password } = body;
+      if (!id_usuario) return err(res, 'Falta id_usuario');
+      if (rol && !['superadmin','admin','user','read'].includes(rol))
+        return err(res, 'Rol inválido');
+
+      if (password) {
+        if (password.length < 12) return err(res, 'Contraseña mínimo 12 caracteres');
+        await sql`UPDATE usuarios SET password_hash = ${hashPassword(password)}, fecha_actualizacion = NOW() WHERE id_usuario = ${id_usuario}`;
+      }
+
+      await sql`
+        UPDATE usuarios SET
+          nombre = COALESCE(NULLIF(${nombre||''},''), nombre),
+          rol = COALESCE(NULLIF(${rol||''},''), rol),
+          activo = COALESCE(NULLIF(${activo||''},''), activo),
+          fecha_actualizacion = NOW()
+        WHERE id_usuario = ${id_usuario}
+      `;
+
+      await log(sql, auth.u, 'UPDATE_USUARIO', 'usuarios', id_usuario);
+      return ok(res, { mensaje: 'Usuario actualizado' });
+    }
+
+    // ─ ASISTENCIAS ────────────────────────────────────────────────
+    if (action === 'importarAsistencias') {
+      const auth = requireAuth(req, 'user');
+      if (!auth) return err(res, 'No autorizado', 401);
+      // registros: [{fecha,dni,apellido_nombre,hora_entrada,hora_salida,servicio}] — estado calculado server-side
+      const { registros } = body;
+      if (!Array.isArray(registros) || !registros.length) return err(res, 'Sin registros');
+      if (registros.length > 1000) return err(res, 'Máximo 1000 registros por importación');
+
+      // Cargar horarios individuales (map dni → {hora_entrada, turno24})
+      const dnis = [...new Set(registros.map(r => r.dni).filter(Boolean))];
+      const horarioRows = dnis.length ? await sql`SELECT dni, hora_entrada, horario_raw FROM horarios WHERE dni = ANY(${dnis}) AND activo='SI'` : [];
+      const horariosMap = Object.fromEntries(horarioRows.map(h => [h.dni, {
+        entrada: h.hora_entrada,
+        turno24: /24\s*hs/i.test(h.horario_raw||'') || (h.hora_entrada && h.hora_entrada === (h.horario_raw||'').match(/\d{1,2}:\d{2}/g)?.[1]?.padStart(5,'0'))
+      }]));
+
+      // Cargar excepciones activas para la fecha
+      const fecha0 = registros[0]?.fecha || '';
+      const excRows = fecha0 ? await sql`SELECT dni, tipo FROM asistencia_excepciones WHERE activo='SI' AND fecha_desde <= ${fecha0} AND fecha_hasta >= ${fecha0}` : [];
+      const excMap = Object.fromEntries(excRows.map(e => [e.dni, e.tipo]));
+
+      let insertados = 0, actualizados = 0, errores = 0;
+      for (const r of registros) {
+        if (!r.fecha || !r.dni || !r.apellido_nombre) { errores++; continue; }
+        const id = genId('ast');
+
+        // Calcular tardanza usando horario individual (si existe) o sin tardanza
+        let estado = 'PRESENTE', minutos_tardanza = 0;
+        if (excMap[r.dni]) {
+          estado = excMap[r.dni]; // VACACIONES, ART, LICENCIA, etc.
+        } else if (r.hora_entrada) {
+          const hor = horariosMap[r.dni];
+          // Turno 24hs: no se evalúa tardanza
+          if (hor && hor.entrada && !hor.turno24) {
+            const [lh, lm] = hor.entrada.split(':').map(Number);
+            const [eh, em] = r.hora_entrada.split(':').map(Number);
+            const limMin = lh * 60 + lm;
+            const entMin = eh * 60 + em;
+            if (entMin > limMin + 11) { // tolerancia 11 minutos
+              minutos_tardanza = entMin - limMin;
+              estado = 'TARDANZA';
+            }
+          }
+        }
+
+        try {
+          const res2 = await sql`
+            INSERT INTO asistencias (id,fecha,dni,apellido_nombre,hora_entrada,hora_salida,estado,servicio,minutos_tardanza,activo,usuario_carga)
+            VALUES (${id},${r.fecha},${r.dni},${r.apellido_nombre},${r.hora_entrada||''},${r.hora_salida||''},${estado},${r.servicio||''},${minutos_tardanza},'SI',${auth.u})
+            ON CONFLICT (fecha,dni) DO UPDATE SET
+              hora_entrada=EXCLUDED.hora_entrada, hora_salida=EXCLUDED.hora_salida,
+              estado=EXCLUDED.estado, servicio=EXCLUDED.servicio,
+              minutos_tardanza=EXCLUDED.minutos_tardanza,
+              fecha_importacion=NOW(), usuario_carga=EXCLUDED.usuario_carga
+            RETURNING (xmax=0) AS inserted
+          `;
+          if (res2[0]?.inserted) insertados++; else actualizados++;
+        } catch (e) { errores++; }
+      }
+      await log(sql, auth.u, 'IMPORTAR_ASISTENCIAS', 'asistencias', fecha0, `${insertados} nuevos, ${actualizados} actualizados, ${errores} errores`);
+      return ok(res, { insertados, actualizados, errores });
+    }
+
+    if (action === 'getAsistencias') {
+      const auth = requireAuth(req, 'read');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const fecha = body.fecha || query.fecha || '';
+      const q = normalizar(body.q || query.q || '');
+      const filtroEstado = body.estado || query.estado || '';
+      const limit = Math.min(parseInt(body.limit || query.limit || 200), 500);
+      const offset = parseInt(body.offset || query.offset || 0);
+      if (!fecha) return ok(res, { asistencias: [], total: 0, ausentes: [] });
+
+      const rows = await sql`
+        SELECT a.*, h.hora_entrada AS horario_esperado, h.horario_raw
+        FROM asistencias a
+        LEFT JOIN horarios h ON h.dni = a.dni AND h.activo='SI'
+        WHERE a.fecha=${fecha} AND a.activo='SI'
+          AND (${q}='' OR LOWER(a.apellido_nombre) LIKE ${'%'+q+'%'} OR a.dni LIKE ${'%'+q+'%'})
+          AND (${filtroEstado}='' OR a.estado=${filtroEstado})
+        ORDER BY a.estado DESC, a.apellido_nombre
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+      const tot = await sql`SELECT COUNT(*) as n FROM asistencias WHERE fecha=${fecha} AND activo='SI'`;
+
+      // Ausentes del padrón: cruzar con horarios activos (solo quienes tienen horario asignado) o todos
+      const ausentesRows = await sql`
+        SELECT a.dni, a.apellido_nombre, a.establecimiento, a.sector,
+               h.hora_entrada, h.horario_raw,
+               e.tipo AS excepcion
+        FROM agentes a
+        LEFT JOIN horarios h ON h.dni = a.dni AND h.activo='SI'
+        LEFT JOIN asistencia_excepciones e ON e.dni = a.dni AND e.activo='SI'
+          AND e.fecha_desde <= ${fecha} AND e.fecha_hasta >= ${fecha}
+        WHERE a.activo='SI'
+          AND a.dni NOT IN (SELECT dni FROM asistencias WHERE fecha=${fecha} AND activo='SI')
+        ORDER BY a.apellido_nombre
+        LIMIT 500
+      `;
+
+      return ok(res, { asistencias: rows, total: parseInt(tot[0].n), ausentes: ausentesRows });
+    }
+
+    // ─ HORARIOS ──────────────────────────────────────────────────
+    if (action === 'importarHorarios') {
+      const auth = requireAuth(req, 'user');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const { horarios } = body;
+      if (!Array.isArray(horarios) || !horarios.length) return err(res, 'Sin registros');
+      if (horarios.length > 2000) return err(res, 'Máximo 2000 registros');
+      let insertados = 0, actualizados = 0, errores = 0;
+      for (const h of horarios) {
+        if (!h.dni || !h.apellido_nombre) { errores++; continue; }
+        const id = genId('hor');
+        try {
+          const r2 = await sql`
+            INSERT INTO horarios (id,bio_id,dni,apellido_nombre,sector,servicio,hora_entrada,hora_salida,horario_raw,activo)
+            VALUES (${id},${h.bio_id||''},${h.dni},${h.apellido_nombre},${h.sector||''},${h.servicio||''},${h.hora_entrada||''},${h.hora_salida||''},${h.horario_raw||''},'SI')
+            ON CONFLICT (dni) DO UPDATE SET
+              bio_id=EXCLUDED.bio_id, apellido_nombre=EXCLUDED.apellido_nombre,
+              sector=EXCLUDED.sector, servicio=EXCLUDED.servicio,
+              hora_entrada=EXCLUDED.hora_entrada, hora_salida=EXCLUDED.hora_salida,
+              horario_raw=EXCLUDED.horario_raw, activo='SI', fecha_carga=NOW()
+            RETURNING (xmax=0) AS inserted
+          `;
+          if (r2[0]?.inserted) insertados++; else actualizados++;
+        } catch (e) { errores++; }
+      }
+      await log(sql, auth.u, 'IMPORTAR_HORARIOS', 'horarios', '', `${insertados} nuevos, ${actualizados} actualizados`);
+      return ok(res, { insertados, actualizados, errores });
+    }
+
+    if (action === 'getHorarios') {
+      const auth = requireAuth(req, 'read');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const q = normalizar(body.q || query.q || '');
+      const rows = await sql`
+        SELECT * FROM horarios WHERE activo='SI'
+          AND (${q}='' OR LOWER(apellido_nombre) LIKE ${'%'+q+'%'} OR dni LIKE ${'%'+q+'%'})
+        ORDER BY apellido_nombre LIMIT 500
+      `;
+      const tot = await sql`SELECT COUNT(*) as n FROM horarios WHERE activo='SI'`;
+      return ok(res, { horarios: rows, total: parseInt(tot[0].n) });
+    }
+
+    // ─ EXCEPCIONES DE ASISTENCIA ──────────────────────────────────
+    if (action === 'addExcepcion') {
+      const auth = requireAuth(req, 'user');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const { dni, apellido_nombre, fecha_desde, fecha_hasta, tipo, observaciones } = body;
+      if (!dni || !fecha_desde || !fecha_hasta || !tipo) return err(res, 'Faltan campos');
+      const id = genId('exc');
+      await sql`INSERT INTO asistencia_excepciones (id,dni,apellido_nombre,fecha_desde,fecha_hasta,tipo,observaciones,activo,usuario_carga)
+        VALUES (${id},${dni},${apellido_nombre||''},${fecha_desde},${fecha_hasta},${tipo},${observaciones||''},'SI',${auth.u})`;
+      await log(sql, auth.u, 'ADD_EXCEPCION', 'asistencia_excepciones', id, `${apellido_nombre} ${tipo} ${fecha_desde}→${fecha_hasta}`);
+      return ok(res, { id });
+    }
+
+    if (action === 'getExcepciones') {
+      const auth = requireAuth(req, 'read');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const desde = body.desde || query.desde || '';
+      const hasta = body.hasta || query.hasta || '';
+      const q = normalizar(body.q || query.q || '');
+      const rows = await sql`
+        SELECT * FROM asistencia_excepciones WHERE activo='SI'
+          AND (${desde}='' OR fecha_hasta >= ${desde})
+          AND (${hasta}='' OR fecha_desde <= ${hasta})
+          AND (${q}='' OR LOWER(apellido_nombre) LIKE ${'%'+q+'%'} OR dni LIKE ${'%'+q+'%'})
+        ORDER BY fecha_desde DESC LIMIT 200
+      `;
+      return ok(res, { excepciones: rows });
+    }
+
+    if (action === 'deleteExcepcion') {
+      const auth = requireAuth(req, 'user');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const { id } = body;
+      if (!id) return err(res, 'Falta id');
+      await sql`UPDATE asistencia_excepciones SET activo='NO' WHERE id=${id}`;
+      return ok(res, { ok: true });
+    }
+
+    // ─ NOVEDADES (alias completo de asistencia_excepciones con documento) ──
+    if (action === 'addNovedad') {
+      const auth = requireAuth(req, 'user');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const { dni, apellido_nombre, fecha_desde, fecha_hasta, tipo, observaciones, documento_url, titulo } = body;
+      if (!dni || !fecha_desde || !fecha_hasta || !tipo) return err(res, 'Faltan campos obligatorios');
+      const id = genId('nov');
+      await sql`INSERT INTO asistencia_excepciones
+        (id,dni,apellido_nombre,fecha_desde,fecha_hasta,tipo,observaciones,documento_url,titulo,activo,usuario_carga)
+        VALUES (${id},${dni},${apellido_nombre||''},${fecha_desde},${fecha_hasta},${tipo},
+                ${observaciones||''},${documento_url||''},${titulo||''},'SI',${auth.u})`;
+      await log(sql, auth.u, 'ADD_NOVEDAD', 'asistencia_excepciones', id,
+        `${apellido_nombre} | ${tipo} | ${fecha_desde}→${fecha_hasta}`);
+      return ok(res, { id });
+    }
+
+    if (action === 'getNovedades') {
+      const auth = requireAuth(req, 'read');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const desde = body.desde || query.desde || '';
+      const hasta = body.hasta || query.hasta || '';
+      const q = normalizar(body.q || query.q || '');
+      const tipo = body.tipo || query.tipo || '';
+      const rows = await sql`
+        SELECT e.*, a.establecimiento, a.sector
+        FROM asistencia_excepciones e
+        LEFT JOIN agentes a ON a.dni = e.dni AND a.activo = 'SI'
+        WHERE e.activo='SI'
+          AND (${desde}='' OR e.fecha_hasta >= ${desde})
+          AND (${hasta}='' OR e.fecha_desde <= ${hasta})
+          AND (${q}='' OR LOWER(e.apellido_nombre) LIKE ${'%'+q+'%'} OR e.dni LIKE ${'%'+q+'%'})
+          AND (${tipo}='' OR e.tipo = ${tipo})
+        ORDER BY e.fecha_desde DESC LIMIT 300
+      `;
+      const tot = await sql`SELECT COUNT(*) as n FROM asistencia_excepciones WHERE activo='SI'`;
+      return ok(res, { novedades: rows, total: parseInt(tot[0].n) });
+    }
+
+    if (action === 'editNovedad') {
+      const auth = requireAuth(req, 'user');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const { id, fecha_desde, fecha_hasta, tipo, observaciones, documento_url, titulo } = body;
+      if (!id) return err(res, 'Falta id');
+      await sql`UPDATE asistencia_excepciones SET
+        fecha_desde=${fecha_desde}, fecha_hasta=${fecha_hasta}, tipo=${tipo},
+        observaciones=${observaciones||''}, documento_url=${documento_url||''},
+        titulo=${titulo||''}
+        WHERE id=${id} AND activo='SI'`;
+      await log(sql, auth.u, 'EDIT_NOVEDAD', 'asistencia_excepciones', id, tipo);
+      return ok(res, { ok: true });
+    }
+
+    if (action === 'deleteNovedad') {
+      const auth = requireAuth(req, 'user');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const { id } = body;
+      if (!id) return err(res, 'Falta id');
+      await sql`UPDATE asistencia_excepciones SET activo='NO' WHERE id=${id}`;
+      await log(sql, auth.u, 'DELETE_NOVEDAD', 'asistencia_excepciones', id, '');
+      return ok(res, { ok: true });
+    }
+
+    if (action === 'getNovedadesAgente') {
+      const auth = requireAuth(req, 'read');
+      if (!auth) return err(res, 'No autorizado', 401);
+      const { dni } = body;
+      if (!dni) return err(res, 'Falta DNI');
+      const rows = await sql`
+        SELECT * FROM asistencia_excepciones
+        WHERE dni=${dni} AND activo='SI'
+        ORDER BY fecha_desde DESC
+      `;
+      return ok(res, { novedades: rows });
+    }
+
+    // ─ LOGS ───────────────────────────────────────────────────────
+    if (action === 'getLogs') {
+      const auth = requireAuth(req, 'admin');
+      if (!auth) return err(res, 'No autorizado', 401);
+
+      const rows = await sql`
+        SELECT * FROM logs ORDER BY timestamp DESC LIMIT 200
+      `;
+      return ok(res, { logs: rows });
+    }
+
+    return err(res, `Acción desconocida: ${action}`, 404);
+
+  } catch (e) {
+    console.error('[API Error]', e.message);
+    return err(res, e.message, 500);
   }
 };
